@@ -13,6 +13,8 @@ npm install -g git+ssh://git@github.com/tilework-tech/nori-substack-cli.git
 nori-substack --version
 ```
 
+Compiled `dist/` output is included, so Git installation does not require TypeScript or an install-time build. The package supports Node.js 18 and pins its HTML parser to a compatible release.
+
 For development:
 
 ```bash
@@ -42,6 +44,46 @@ The official LinkedIn-handle lookup accepts either `--developer-token` or `SUBST
 ```bash
 nori-substack --developer-token "$SUBSTACK_DEVELOPER_TOKEN" profile linkedin --handle alice
 ```
+
+## Portable syndication exports
+
+Substack retrieval and normalization belong in this CLI. Export commands produce versioned JSON that triggers and destination CLIs can consume without understanding Substack APIs or HTML.
+
+Export a public post as an Article bundle:
+
+```bash
+nori-substack post export \
+  --url https://example.substack.com/p/example-post \
+  --output article.json
+```
+
+The bundle preserves source copy and includes the title, canonical URL, cleaned HTML, cover image, and inline images. Structural elements use portable markers such as `[[NORI_DIVIDER]]` and `[[NORI_IMAGE:0]]`.
+
+Export recent top-level Notes from one author:
+
+```bash
+nori-substack note export \
+  --user-id 9744387 \
+  --lookback-hours 4 \
+  --output notes.json
+```
+
+To select an approved older Note, add `--note-id <id>`; the author and top-level filters still apply while the lookback cutoff is bypassed. Notes are ordered oldest first and preserve text, quote blocks, links, remote images, IDs, and timestamps.
+
+Example Article artifact:
+
+```json
+{
+  "version": 1,
+  "kind": "article",
+  "title": "Example",
+  "canonicalUrl": "https://example.substack.com/p/example",
+  "html": "<p>Exact source copy</p>",
+  "images": []
+}
+```
+
+These commands only read Substack. Cross-platform selection, approval, deduplication, and publishing belong in the trigger or workflow that invokes the destination CLI.
 
 ## Authentication
 
@@ -73,8 +115,8 @@ nori-substack auth host --stop --confirm
 
 - `profile`: authenticated identity and public/official profile lookup
 - `publication`: owned publications, search, settings, metadata updates, sections, pages, users, tags, and exports
-- `post`: public posts, drafts, create/update/delete, publish, schedule, and statistics
-- `note`: feed, profiles, details, drafts, create, reply, delete, and seen state
+- `post`: public posts and portable exports, drafts, create/update/delete, publish, schedule, and statistics
+- `note`: feed, profiles, portable exports, details, drafts, create, reply, delete, and seen state
 - `comment`: list, create, delete, react, unreact, and moderation metadata
 - `reader`: inbox, feed, tabs, subscriptions, archives, activity, messages, unread counts, and blocked users
 - `subscriber`: list, add, remove, and import status
@@ -127,6 +169,6 @@ The CLI does not automate captchas, publication creation, magic-link email retri
 - Session cookies and storage-state values are redacted from errors and normal output.
 - Public operations never require credentials.
 - Non-idempotent writes are not automatically retried.
-- Credential state, environment files, build output, and package archives are excluded from Git.
+- Credential state, environment files, and package archives are excluded from Git; compiled `dist/` is intentionally tracked for Git consumers.
 
 This repository is private and unlicensed (`UNLICENSED`).
