@@ -6,7 +6,8 @@ export interface ExecutionResult { data: unknown; dryRun?: boolean }
 
 export async function executeCommand(family: string, operation: string, options: Record<string, unknown>, globals: Record<string, unknown>): Promise<ExecutionResult> {
   const publicOperation = (family === "publication" && ["get", "feed", "archive"].includes(operation))
-    || (family === "post" && ["list", "get"].includes(operation))
+    || (family === "post" && ["list", "get", "export"].includes(operation))
+    || (family === "note" && operation === "export")
     || (family === "profile" && ["get", "linkedin"].includes(operation))
     || (family === "comment" && operation === "list")
     || family === "discover";

@@ -44,6 +44,7 @@ export const commandFamilies: readonly FamilySpec[] = [
   { name: "post", description: "Inspect and manage posts.", operations: [
     { name: "list", description: "Use this command to list public Substack posts.", options: [publicationUrl, limit, offset] },
     { name: "get", description: "Use this command to get a public post by id.", options: [publicationUrl, postId] },
+    { name: "export", description: "Export a public Substack post as a portable article bundle.", options: [opt("--url <url>", "Public Substack post URL.", true), opt("--output <path>", "Destination JSON file.", true)] },
     { name: "drafts", description: "Use this command to list publication drafts.", options: [publicationUrl, limit, offset] },
     { name: "create", description: "Use this command to create a draft.", options: [publicationUrl, opt("--data <json>", "Draft JSON payload.", true), dryRun, confirm] },
     { name: "update", description: "Use this command to update a draft.", options: [publicationUrl, draftId, opt("--data <json>", "Draft JSON payload.", true), dryRun, confirm] },
@@ -55,6 +56,7 @@ export const commandFamilies: readonly FamilySpec[] = [
   { name: "note", description: "Inspect and manage Notes.", operations: [
     { name: "feed", description: "Use this command to read the Notes feed.", options: [limit, opt("--cursor <cursor>", "Pagination cursor.")] },
     { name: "profile", description: "Use this command to read a profile feed.", options: [opt("--user-id <id>", "Numeric user identifier.", true), limit] },
+    { name: "export", description: "Export public Substack Notes as normalized JSON.", options: [opt("--user-id <id>", "Numeric user identifier.", true), { flags: "--lookback-hours <hours>", description: "Only include recent Notes.", defaultValue: "4" }, opt("--note-id <id>", "Export a specific Note regardless of the lookback window."), opt("--output <path>", "Destination JSON file.", true)] },
     { name: "get", description: "Use this command to read a feed entity.", options: [opt("--entity-key <key>", "Feed entity key.", true)] },
     { name: "drafts", description: "Use this command to list Note drafts.", options: [publicationUrl, limit] },
     { name: "create", description: "Use this command to create a Note.", options: [opt("--text <text>", "Exact Note text.", true), opt("--reply-minimum-role <role>", "Minimum reply role."), dryRun, confirm] },
