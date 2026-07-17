@@ -117,7 +117,7 @@ Errors go to stderr as structured JSON with stable codes, retry guidance, and cr
 
 ## Stability and limitations
 
-Public RSS/JSON reads are the most stable surface. The official developer API is currently narrow. Most authenticated management commands call undocumented Substack web endpoints and may drift without notice; HTTP failures are returned explicitly rather than treated as success.
+Public RSS/JSON reads are the most stable surface. When Substack forbids the former public publication JSON endpoint, `publication get` extracts the same publication object from the public homepage preload. The official developer API is currently narrow. Most authenticated management commands call undocumented Substack web endpoints and may drift without notice; HTTP failures are returned explicitly rather than treated as success.
 
 The CLI does not automate captchas, publication creation, magic-link email retrieval, or unmapped direct-message sending. Hosted auth orchestrates a browser for a human; it does not bypass challenges. Live mutation tests require a designated test publication and are intentionally not part of the default suite.
 

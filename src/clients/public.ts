@@ -17,6 +17,27 @@ async function fetchText(url: URL): Promise<string> {
   if (!response.ok) throw new CliError("HTTP_ERROR", `Substack request failed with HTTP ${response.status}.`, 8, response.status >= 500, { status: response.status });
   return response.text();
 }
+async function publicationFromHomepage(publicationUrl: string): Promise<unknown> {
+  const url = endpoint(publicationUrl, "/");
+  let response: Response;
+  try { response = await fetch(url, { headers: { "user-agent": "nori-substack-cli/0.1", accept: "text/html" } }); }
+  catch (error) { throw new CliError("NETWORK_ERROR", `Unable to reach Substack: ${error instanceof Error ? error.message : String(error)}`, 8, true); }
+  if (!response.ok) throw new CliError("HTTP_ERROR", `Substack homepage request failed with HTTP ${response.status}.`, 8, response.status >= 500, { status: response.status });
+  const html = await response.text();
+  const $ = load(html);
+  for (const script of $("script").toArray()) {
+    const source = $(script).text();
+    const match = source.match(/window\._preloads\s*=\s*JSON\.parse\(("(?:\\.|[^"\\])*")\)/s);
+    if (!match) continue;
+    try {
+      const serialized = JSON.parse(match[1]) as string;
+      const preloads = JSON.parse(serialized) as { pub?: unknown };
+      if (preloads.pub && typeof preloads.pub === "object") return preloads.pub;
+    } catch { break; }
+  }
+  throw new CliError("INVALID_RESPONSE", "Substack homepage did not contain publication preload metadata.", 8, false);
+}
+
 
 async function fetchOfficial(url: URL, token?: string): Promise<unknown> {
   let response: Response;
@@ -28,7 +49,13 @@ async function fetchOfficial(url: URL, token?: string): Promise<unknown> {
 }
 
 export class PublicClient {
-  async getPublication(publicationUrl: string): Promise<unknown> { return getJson(endpoint(publicationUrl, "/api/v1/publication")); }
+  async getPublication(publicationUrl: string): Promise<unknown> {
+    try { return await getJson(endpoint(publicationUrl, "/api/v1/publication")); }
+    catch (error) {
+      if (error instanceof CliError && error.code === "HTTP_ERROR" && error.details.status === 403) return publicationFromHomepage(publicationUrl);
+      throw error;
+    }
+  }
   async getArchive(publicationUrl: string): Promise<unknown> { return getJson(endpoint(publicationUrl, "/api/v1/archive")); }
   async listPosts(publicationUrl: string, options: PostListOptions = {}): Promise<unknown> { return getJson(endpoint(publicationUrl, "/api/v1/posts"), { query: [["limit", options.limit], ["offset", options.offset]] }); }
   async getPost(publicationUrl: string, postId: string): Promise<unknown> { return getJson(endpoint(publicationUrl, `/api/v1/posts/by-id/${encodeURIComponent(postId)}`)); }
