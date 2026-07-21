@@ -34,17 +34,13 @@ export async function exportPostArtifact(client: PublicClient, postUrl: string):
     $(element).replaceWith(`<p>${marker}</p>${caption ? `<p><em>${caption}</em></p>` : ""}`);
   });
   const parts: string[] = [];
-  const seen = new Set<string>();
   $("p,ul,ol,h1,h2,h3,blockquote").each((_index, element) => {
     const node = $(element);
-    if (node.parent().closest("ul,ol,p,blockquote").length && !node.is("ul,ol")) return;
+    if (node.parent().closest("ul,ol,p,blockquote").length) return;
     if (!node.text().trim()) return;
     node.find("*").each((_childIndex, child) => { const childNode = $(child); const href = childNode.is("a") ? childNode.attr("href") : undefined; for (const attr of Object.keys(child.attribs ?? {})) childNode.removeAttr(attr); if (href) childNode.attr("href", href); });
     for (const attr of Object.keys(element.attribs ?? {})) node.removeAttr(attr);
     const serialized = $.html(element);
-    const marker = /\[\[NORI_(?:DIVIDER|IMAGE)/.test(node.text());
-    if (seen.has(serialized) && !marker) return;
-    seen.add(serialized);
     parts.push(serialized);
   });
   return { version: 1, kind: "article", title: stringField(post.title, "title"), canonicalUrl, html: parts.join(""), images, ...(typeof post.cover_image === "string" ? { coverUrl: post.cover_image } : {}) };

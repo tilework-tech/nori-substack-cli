@@ -57,7 +57,7 @@ nori-substack post export \
   --output article.json
 ```
 
-The bundle preserves source copy and includes the title, canonical URL, cleaned HTML, cover image, and inline images. Structural elements use portable markers such as `[[NORI_DIVIDER]]` and `[[NORI_IMAGE:0]]`.
+The bundle preserves source copy and includes the title, canonical URL, cleaned HTML, cover image, and inline images. Structural elements use portable markers such as `[[NORI_DIVIDER]]` and `[[NORI_IMAGE:0]]`. Nested lists remain inside their nearest exported parent structure, so each list is emitted exactly once; intentionally repeated source prose remains repeated rather than being deduplicated.
 
 Export recent top-level Notes from one author:
 
