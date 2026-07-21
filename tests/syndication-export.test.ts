@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, expect, test } from "vitest";
+import { load } from "cheerio";
 import { runCli, withHttpServer } from "./helpers.js";
 
 const closers: Array<() => Promise<void>> = [];
@@ -49,6 +50,40 @@ test("exports a public Substack post as a portable article bundle", async () => 
   expect(bundle.html).toContain("[[NORI_IMAGE:0]]");
   expect(bundle.html).toContain("[1] Source note");
   expect(bundle.html).not.toContain("Subscribe now");
+});
+
+test("exports nested lists once while preserving intentionally repeated prose", async () => {
+  const server = await withHttpServer((_request, response) => {
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({
+      title: "Nested structures",
+      canonical_url: `${server.origin}/p/nested-structures`,
+      body_html: [
+        "<p>Repeat this sentence.</p>",
+        "<p>Repeat this sentence.</p>",
+        "<ul><li><p>Security links:</p><ol>",
+        '<li><a href="https://example.com/one">One</a></li>',
+        '<li><a href="https://example.com/two">Two</a></li>',
+        "</ol></li></ul>",
+      ].join(""),
+    }));
+  });
+  closers.push(server.close);
+  const { output } = await tempOutput("nested-article.json");
+
+  const result = await runCli(["post", "export", "--url", `${server.origin}/p/nested-structures`, "--output", output]);
+
+  expect(result.code).toBe(0);
+  const bundle = JSON.parse(await readFile(output, "utf8")) as { html: string };
+  const $ = load(bundle.html);
+  expect($("body > p").filter((_index, element) => $(element).text() === "Repeat this sentence.")).toHaveLength(2);
+  expect($("body > ul")).toHaveLength(1);
+  expect($("body > ol")).toHaveLength(0);
+  expect($("body > ul > li > ol")).toHaveLength(1);
+  expect($("body > ul > li > ol a").map((_index, element) => ({ text: $(element).text(), href: $(element).attr("href") })).get()).toEqual([
+    { text: "One", href: "https://example.com/one" },
+    { text: "Two", href: "https://example.com/two" },
+  ]);
 });
 
 test("exports only recent top-level Notes from the requested author", async () => {

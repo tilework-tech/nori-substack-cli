@@ -39,10 +39,9 @@ export async function exportPostArtifact(client, postUrl) {
         $(element).replaceWith(`<p>${marker}</p>${caption ? `<p><em>${caption}</em></p>` : ""}`);
     });
     const parts = [];
-    const seen = new Set();
     $("p,ul,ol,h1,h2,h3,blockquote").each((_index, element) => {
         const node = $(element);
-        if (node.parent().closest("ul,ol,p,blockquote").length && !node.is("ul,ol"))
+        if (node.parent().closest("ul,ol,p,blockquote").length)
             return;
         if (!node.text().trim())
             return;
@@ -52,10 +51,6 @@ export async function exportPostArtifact(client, postUrl) {
         for (const attr of Object.keys(element.attribs ?? {}))
             node.removeAttr(attr);
         const serialized = $.html(element);
-        const marker = /\[\[NORI_(?:DIVIDER|IMAGE)/.test(node.text());
-        if (seen.has(serialized) && !marker)
-            return;
-        seen.add(serialized);
         parts.push(serialized);
     });
     return { version: 1, kind: "article", title: stringField(post.title, "title"), canonicalUrl, html: parts.join(""), images, ...(typeof post.cover_image === "string" ? { coverUrl: post.cover_image } : {}) };
