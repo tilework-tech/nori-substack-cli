@@ -20,9 +20,22 @@ export async function exportPostArtifact(client, postUrl) {
     const canonicalUrl = typeof post.canonical_url === "string" ? post.canonical_url : postUrl;
     const $ = load(stringField(post.body_html, "body_html"), { xmlMode: false });
     const images = [];
-    $(".subscription-widget,.subscription-widget-subscribe,.preamble,form,.fake-button,.button-wrapper,.digest-post-embed,.highlighted_code_block,[data-component-name='AssetErrorToDOM']").remove();
+    const videos = [];
+    $(".subscription-widget,.subscription-widget-subscribe,.preamble,form,.fake-button,.digest-post-embed,.highlighted_code_block,[data-component-name='AssetErrorToDOM']").remove();
     $("p").each((_index, element) => { const text = $(element).text(); if (/Thanks for reading/.test(text) && /Subscribe/.test(text))
         $(element).remove(); });
+    // CTA buttons (e.g. event signup) render as <p class="button-wrapper"><a class="button" href>…</a></p>.
+    // X Articles have no button element, so preserve real external CTAs as links rather than dropping
+    // them with the subscription UI; drop button wrappers that carry no external link.
+    $(".button-wrapper").each((_index, element) => {
+        const anchor = $(element).find("a[href]").first();
+        const href = anchor.attr("href") ?? "";
+        const text = anchor.text().replace(/\s+/g, " ").trim();
+        if (/^https?:\/\//.test(href) && text)
+            $(element).replaceWith(`<p><a href="${escapeHtml(href)}">${escapeHtml(text)}</a></p>`);
+        else
+            $(element).remove();
+    });
     $("div > hr").each((_index, element) => { const parent = $(element).parent(); if (parent.is("div") && parent.children().length === 1)
         parent.replaceWith("<p>[[NORI_DIVIDER]]</p>"); });
     $("a.footnote-anchor").each((_index, element) => { $(element).replaceWith(`[${$(element).text().trim()}]`); });
@@ -38,6 +51,24 @@ export async function exportPostArtifact(client, postUrl) {
         images.push({ url, caption });
         $(element).replaceWith(`<p>${marker}</p>${caption ? `<p><em>${caption}</em></p>` : ""}`);
     });
+    // Video embeds. X Articles cannot embed external players (the composer's Insert
+    // menu has no video/embed option), so preserve each embed as a link rather than
+    // dropping it — otherwise the serializer below silently discards these divs.
+    const seenVideoIds = new Set();
+    $(".youtube-wrap,.embedded-publication-wrap,iframe").each((_index, element) => {
+        const node = $(element);
+        if (node.closest(".captioned-image-container").length)
+            return;
+        const iframeSrc = node.is("iframe") ? node.attr("src") ?? "" : node.find("iframe").attr("src") ?? "";
+        const id = youtubeId(iframeSrc);
+        if (!id || seenVideoIds.has(id))
+            return;
+        seenVideoIds.add(id);
+        const url = `https://www.youtube.com/watch?v=${id}`;
+        const marker = `[[NORI_VIDEO:${videos.length}]]`;
+        videos.push({ id, url });
+        node.replaceWith(`<p>${marker}</p>`);
+    });
     const parts = [];
     const seen = new Set();
     $("p,ul,ol,h1,h2,h3,blockquote").each((_index, element) => {
@@ -52,13 +83,42 @@ export async function exportPostArtifact(client, postUrl) {
         for (const attr of Object.keys(element.attribs ?? {}))
             node.removeAttr(attr);
         const serialized = $.html(element);
-        const marker = /\[\[NORI_(?:DIVIDER|IMAGE)/.test(node.text());
+        const marker = /\[\[NORI_(?:DIVIDER|IMAGE|VIDEO)/.test(node.text());
         if (seen.has(serialized) && !marker)
             return;
         seen.add(serialized);
         parts.push(serialized);
     });
-    return { version: 1, kind: "article", title: stringField(post.title, "title"), canonicalUrl, html: parts.join(""), images, ...(typeof post.cover_image === "string" ? { coverUrl: post.cover_image } : {}) };
+    let html = parts.join("");
+    // Resolve each video marker to a titled link (best-effort title via oEmbed).
+    for (let index = 0; index < videos.length; index++) {
+        const video = videos[index];
+        video.title = await youtubeTitle(video.url);
+        const label = escapeHtml(video.title ?? video.url);
+        html = html.replace(`[[NORI_VIDEO:${index}]]`, `<a href="${escapeHtml(video.url)}">${label}</a>`);
+    }
+    return { version: 1, kind: "article", title: stringField(post.title, "title"), canonicalUrl, html, images, videos, ...(typeof post.cover_image === "string" ? { coverUrl: post.cover_image } : {}) };
+}
+function youtubeId(src) {
+    if (!src)
+        return undefined;
+    const match = src.match(/(?:youtube(?:-nocookie)?\.com\/(?:embed|v)\/|youtu\.be\/|[?&]v=)([A-Za-z0-9_-]{11})/);
+    return match ? match[1] : undefined;
+}
+function escapeHtml(value) {
+    return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+async function youtubeTitle(watchUrl) {
+    try {
+        const response = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(watchUrl)}&format=json`, { signal: AbortSignal.timeout(8_000) });
+        if (!response.ok)
+            return undefined;
+        const data = await response.json();
+        return typeof data.title === "string" && data.title.trim() ? data.title.trim() : undefined;
+    }
+    catch {
+        return undefined;
+    }
 }
 function inline(nodes = []) { return nodes.map((node) => node.type === "text" ? typeof node.text === "string" ? node.text : "" : /hard_?break/i.test(String(node.type)) ? "\n" : inline(node.content)).join(""); }
 function renderNote(comment) {
