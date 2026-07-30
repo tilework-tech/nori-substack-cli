@@ -27,7 +27,7 @@ test("exports a public Substack post as a portable article bundle", async () => 
       title: "Agents from Modal",
       canonical_url: `${server.origin}/p/agent-first`,
       cover_image: `${server.origin}/cover.png`,
-      body_html: `<p>Keep “from Modal” verbatim.</p><div class="subscription-widget">Subscribe now</div><div><hr></div><div class="captioned-image-container"><img src="${server.origin}/diagram.png"><figcaption>A diagram</figcaption></div><div class="footnote"><span class="footnote-number">1</span><span class="footnote-content">Source note</span></div>`,
+      body_html: `<p>Keep “from Modal” verbatim.</p><div class="subscription-widget">Subscribe now</div><div><hr></div><div class="captioned-image-container"><img src="${server.origin}/diagram.png"><figcaption>A diagram</figcaption></div><div id="youtube2-p-e4dHJTTuM" class="youtube-wrap"><div class="youtube-inner"><iframe src="https://www.youtube-nocookie.com/embed/p-e4dHJTTuM?rel=0" frameborder="0"></iframe></div></div><div class="footnote"><span class="footnote-number">1</span><span class="footnote-content">Source note</span></div>`,
     }));
   });
   closers.push(server.close);
@@ -49,6 +49,12 @@ test("exports a public Substack post as a portable article bundle", async () => 
   expect(bundle.html).toContain("[[NORI_IMAGE:0]]");
   expect(bundle.html).toContain("[1] Source note");
   expect(bundle.html).not.toContain("Subscribe now");
+  // Video embeds are preserved as links (X Articles cannot embed players), not dropped.
+  expect(bundle.videos).toHaveLength(1);
+  expect(bundle.videos[0]).toMatchObject({ id: "p-e4dHJTTuM", url: "https://www.youtube.com/watch?v=p-e4dHJTTuM" });
+  expect(bundle.html).toContain('href="https://www.youtube.com/watch?v=p-e4dHJTTuM"');
+  expect(bundle.html).not.toContain("[[NORI_VIDEO");
+  expect(bundle.html).not.toContain("youtube-nocookie");
 });
 
 test("exports only recent top-level Notes from the requested author", async () => {
