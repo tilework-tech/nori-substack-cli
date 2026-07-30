@@ -27,7 +27,7 @@ test("exports a public Substack post as a portable article bundle", async () => 
       title: "Agents from Modal",
       canonical_url: `${server.origin}/p/agent-first`,
       cover_image: `${server.origin}/cover.png`,
-      body_html: `<p>Keep “from Modal” verbatim.</p><div class="subscription-widget">Subscribe now</div><div><hr></div><div class="captioned-image-container"><img src="${server.origin}/diagram.png"><figcaption>A diagram</figcaption></div><div id="youtube2-p-e4dHJTTuM" class="youtube-wrap"><div class="youtube-inner"><iframe src="https://www.youtube-nocookie.com/embed/p-e4dHJTTuM?rel=0" frameborder="0"></iframe></div></div><div class="footnote"><span class="footnote-number">1</span><span class="footnote-content">Source note</span></div>`,
+      body_html: `<p>Keep “from Modal” verbatim.</p><p class="button-wrapper"><a class="button primary" href="https://luma.com/agentics-4qd8"><span>Click Here for Agentics Flagship Meetup</span></a></p><div class="subscription-widget">Subscribe now</div><div><hr></div><div class="captioned-image-container"><img src="${server.origin}/diagram.png"><figcaption>A diagram</figcaption></div><div id="youtube2-p-e4dHJTTuM" class="youtube-wrap"><div class="youtube-inner"><iframe src="https://www.youtube-nocookie.com/embed/p-e4dHJTTuM?rel=0" frameborder="0"></iframe></div></div><div class="footnote"><span class="footnote-number">1</span><span class="footnote-content">Source note</span></div>`,
     }));
   });
   closers.push(server.close);
@@ -55,6 +55,9 @@ test("exports a public Substack post as a portable article bundle", async () => 
   expect(bundle.html).toContain('href="https://www.youtube.com/watch?v=p-e4dHJTTuM"');
   expect(bundle.html).not.toContain("[[NORI_VIDEO");
   expect(bundle.html).not.toContain("youtube-nocookie");
+  // CTA / signup buttons are preserved as links (X has no button element), not dropped.
+  expect(bundle.html).toContain('<a href="https://luma.com/agentics-4qd8">Click Here for Agentics Flagship Meetup</a>');
+  expect(bundle.html).not.toContain("button-wrapper");
 });
 
 test("exports only recent top-level Notes from the requested author", async () => {

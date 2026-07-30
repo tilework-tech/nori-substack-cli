@@ -21,9 +21,21 @@ export async function exportPostArtifact(client, postUrl) {
     const $ = load(stringField(post.body_html, "body_html"), { xmlMode: false });
     const images = [];
     const videos = [];
-    $(".subscription-widget,.subscription-widget-subscribe,.preamble,form,.fake-button,.button-wrapper,.digest-post-embed,.highlighted_code_block,[data-component-name='AssetErrorToDOM']").remove();
+    $(".subscription-widget,.subscription-widget-subscribe,.preamble,form,.fake-button,.digest-post-embed,.highlighted_code_block,[data-component-name='AssetErrorToDOM']").remove();
     $("p").each((_index, element) => { const text = $(element).text(); if (/Thanks for reading/.test(text) && /Subscribe/.test(text))
         $(element).remove(); });
+    // CTA buttons (e.g. event signup) render as <p class="button-wrapper"><a class="button" href>…</a></p>.
+    // X Articles have no button element, so preserve real external CTAs as links rather than dropping
+    // them with the subscription UI; drop button wrappers that carry no external link.
+    $(".button-wrapper").each((_index, element) => {
+        const anchor = $(element).find("a[href]").first();
+        const href = anchor.attr("href") ?? "";
+        const text = anchor.text().replace(/\s+/g, " ").trim();
+        if (/^https?:\/\//.test(href) && text)
+            $(element).replaceWith(`<p><a href="${escapeHtml(href)}">${escapeHtml(text)}</a></p>`);
+        else
+            $(element).remove();
+    });
     $("div > hr").each((_index, element) => { const parent = $(element).parent(); if (parent.is("div") && parent.children().length === 1)
         parent.replaceWith("<p>[[NORI_DIVIDER]]</p>"); });
     $("a.footnote-anchor").each((_index, element) => { $(element).replaceWith(`[${$(element).text().trim()}]`); });
