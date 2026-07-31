@@ -8,10 +8,15 @@ export interface CliResult {
 }
 
 export async function runCli(args: string[], env: NodeJS.ProcessEnv = {}): Promise<CliResult> {
+  const childEnv = { ...process.env, ...env, NO_COLOR: "1" };
+  // Keep the suite hermetic: an ambient NORIAGENT_SUBSTACK_STORAGE_B64 (e.g. a real
+  // org credential) would otherwise override test fixtures and get written to the
+  // default on-disk storage-state path, clobbering live credentials.
+  if (!("NORIAGENT_SUBSTACK_STORAGE_B64" in env)) delete childEnv.NORIAGENT_SUBSTACK_STORAGE_B64;
   return await new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ["--import", "tsx", "src/index.ts", ...args], {
       cwd: process.cwd(),
-      env: { ...process.env, ...env, NO_COLOR: "1" },
+      env: childEnv,
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
