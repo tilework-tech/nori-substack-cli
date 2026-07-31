@@ -19,7 +19,7 @@ For development:
 
 ```bash
 npm install
-npm run build
+npm run compile
 npm test
 npm run lint
 ```

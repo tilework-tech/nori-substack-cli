@@ -15,12 +15,12 @@
     "docs.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "compile": "tsc -p tsconfig.json",
     "dev": "tsx src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src tests",
-    "prepack": "npm run build && npm test"
+    "prepublishOnly": "npm run compile && npm test"
   },
   "engines": {
     "node": ">=18.18.0"

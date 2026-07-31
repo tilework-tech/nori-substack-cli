@@ -23,7 +23,9 @@ test("installs from Git without a TypeScript toolchain", async () => {
 
   const manifest = JSON.parse(await readFile("package.json", "utf8")) as Record<string, unknown>;
   manifest.private = false;
-  manifest.devDependencies = {};
+  // Keep the real devDependencies: a faithful git install must succeed without
+  // pacote cloning and installing them. Emptying them here would hide exactly
+  // the preparation-gate trip this package must avoid.
   await writeFile(path.join(source, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
   await execute("git", ["init"], { cwd: source });

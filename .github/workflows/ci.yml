@@ -20,7 +20,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
-      - run: npm run build
+      - run: npm run compile
       - name: Verify committed dist/ is in sync with source
         run: git diff --exit-code -- dist
       - run: npm test
