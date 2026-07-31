@@ -7,11 +7,12 @@ export async function authenticatedRequest<T = unknown>(request: AuthenticatedRe
   const state = await resolveStorageState(request.globals);
   const cookie = cookieHeader(state);
   const method = request.method ?? "GET";
+  const { origin } = new URL(request.url);
   let response: Response;
   try {
     response = await fetch(request.url, {
       method,
-      headers: { accept: "application/json", cookie, ...(request.body === undefined ? {} : { "content-type": "application/json" }) },
+      headers: { accept: "application/json", cookie, origin, referer: `${origin}/publish/home`, ...(request.body === undefined ? {} : { "content-type": "application/json" }) },
       ...(request.body === undefined ? {} : { body: JSON.stringify(request.body) }),
     });
   } catch (error) {
