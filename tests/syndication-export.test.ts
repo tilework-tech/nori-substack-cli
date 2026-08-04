@@ -105,6 +105,39 @@ test("exports only recent top-level Notes from the requested author", async () =
   }]);
 });
 
+test("exports a restack Note with its quoted selection and canonical link", async () => {
+  const now = Date.now();
+  const server = await withHttpServer((request, response) => {
+    expect(request.url).toBe("/api/v1/reader/feed/profile/9744387?types=note&limit=20");
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({ items: [{ comment: {
+      id: 501,
+      user_id: 9744387,
+      type: "feed",
+      ancestor_path: "",
+      date: new Date(now - 30 * 60_000).toISOString(),
+      body_json: { content: [{ type: "paragraph", content: [{ type: "text", text: "Easily the line that stood out the most." }] }] },
+      attachments: [{
+        type: "post",
+        postSelection: { text: "My conversations make me wonder if the technical content of data center deals is mostly beside the point." },
+        post: { canonical_url: "https://jasmi.news/p/no-data-centers-in-my-backyard" },
+      }],
+    } }] }));
+  });
+  closers.push(server.close);
+  const { output } = await tempOutput("restack.json");
+
+  const result = await runCli(["--account-origin", server.origin, "note", "export", "--user-id", "9744387", "--note-id", "501", "--output", output]);
+
+  expect(result.code).toBe(0);
+  expect(JSON.parse(await readFile(output, "utf8")).posts).toEqual([{
+    id: "501",
+    text: "Easily the line that stood out the most.\n\n> My conversations make me wonder if the technical content of data center deals is mostly beside the point.\n\nhttps://jasmi.news/p/no-data-centers-in-my-backyard",
+    images: [],
+    publishedAt: expect.any(String),
+  }]);
+});
+
 test("a forced Note id is exported even when it is outside the lookback window", async () => {
   const server = await withHttpServer((request, response) => {
     expect(request.url).toBe("/api/v1/reader/feed/profile/9744387?types=note&limit=20");

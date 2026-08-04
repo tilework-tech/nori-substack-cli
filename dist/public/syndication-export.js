@@ -121,13 +121,23 @@ async function youtubeTitle(watchUrl) {
     }
 }
 function inline(nodes = []) { return nodes.map((node) => node.type === "text" ? typeof node.text === "string" ? node.text : "" : /hard_?break/i.test(String(node.type)) ? "\n" : inline(node.content)).join(""); }
+// Prefix every line of quoted text with a leading ">" per our quote-syndication convention (blank lines become a bare ">").
+function toBlockquote(text) { return text.split("\n").map((line) => line ? `> ${line}` : ">").join("\n"); }
 function renderNote(comment) {
     const content = comment.body_json?.content;
     if (!Array.isArray(content))
         return typeof comment.body === "string" ? comment.body.trim() : "";
-    return content.map((node) => node.type !== "blockquote" ? inline(node.content) : (node.content ?? []).map((child) => inline(child.content).split("\n").map((line) => line ? `> ${line}` : ">").join("\n")).join("\n\n")).join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
+    return content.map((node) => node.type !== "blockquote" ? inline(node.content) : (node.content ?? []).map((child) => toBlockquote(inline(child.content))).join("\n\n")).join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 function attachmentType(value) { return typeof value === "object" && value !== null && !Array.isArray(value); }
+// A restack ("post" attachment) carries the quoted excerpt in postSelection.text and the canonical link in post.canonical_url.
+// The base note body only holds the author's own commentary, so without this the quoted selection and link are dropped.
+function renderRestack(attachment) {
+    const selection = attachmentType(attachment.postSelection) && typeof attachment.postSelection.text === "string" ? attachment.postSelection.text.trim() : "";
+    const post = attachmentType(attachment.post) ? attachment.post : undefined;
+    const url = post && typeof post.canonical_url === "string" && post.canonical_url ? post.canonical_url : "";
+    return { ...(selection ? { quote: selection } : {}), ...(url ? { url } : {}) };
+}
 export async function exportNotesArtifact(client, options) {
     const cutoff = (options.now ?? new Date()).getTime() - options.lookbackHours * 3_600_000;
     const items = [];
@@ -157,7 +167,14 @@ export async function exportNotesArtifact(client, options) {
         const attachments = (comment.attachments ?? []).filter(attachmentType);
         const images = attachments.filter((attachment) => attachment.type === "image" && typeof attachment.imageUrl === "string").map((attachment) => attachment.imageUrl);
         const links = attachments.filter((attachment) => attachment.type === "link" && attachmentType(attachment.linkMetadata) && typeof attachment.linkMetadata.url === "string").map((attachment) => attachment.linkMetadata.url);
+        const restacks = attachments.filter((attachment) => attachment.type === "post").map(renderRestack);
         let text = renderNote(comment);
+        for (const restack of restacks) {
+            if (restack.quote && !text.includes(restack.quote))
+                text = text ? `${text}\n\n${toBlockquote(restack.quote)}` : toBlockquote(restack.quote);
+            if (restack.url && !text.includes(restack.url))
+                text = text ? `${text}\n\n${restack.url}` : restack.url;
+        }
         for (const url of links)
             if (!text.includes(url))
                 text = text ? `${text}\n\n${url}` : url;
