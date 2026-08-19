@@ -123,11 +123,36 @@ async function youtubeTitle(watchUrl) {
 function inline(nodes = []) { return nodes.map((node) => node.type === "text" ? typeof node.text === "string" ? node.text : "" : /hard_?break/i.test(String(node.type)) ? "\n" : inline(node.content)).join(""); }
 // Prefix every line of quoted text with a leading ">" per our quote-syndication convention (blank lines become a bare ">").
 function toBlockquote(text) { return text.split("\n").map((line) => line ? `> ${line}` : ">").join("\n"); }
+// Substack has used both camelCase ("bulletList") and snake_case ("bullet_list") node names across schema versions.
+function isNodeType(node, ...names) {
+    const type = String(node.type ?? "").replace(/_/g, "").toLowerCase();
+    return names.some((name) => name.toLowerCase() === type);
+}
+// X has no list formatting, so a list has to carry its own plain-text markers. Without them every
+// item collapses into one run-on line ("entire xai team is firedcursor acquisition ...").
+function renderList(node) {
+    const ordered = isNodeType(node, "orderedlist");
+    const start = typeof node.attrs?.start === "number" ? node.attrs.start : 1;
+    return (node.content ?? []).map((item, index) => {
+        const marker = ordered ? `${start + index}. ` : "- ";
+        // Nested lists hang off the same item, so keep an item's blocks on adjacent lines and indent
+        // continuation lines under the marker.
+        const [first = "", ...rest] = (item.content ?? []).map(renderBlock).filter(Boolean).join("\n").split("\n");
+        return [`${marker}${first}`, ...rest.map((line) => line ? `  ${line}` : line)].join("\n");
+    }).join("\n");
+}
+function renderBlock(node) {
+    if (isNodeType(node, "blockquote"))
+        return (node.content ?? []).map((child) => toBlockquote(inline(child.content))).join("\n\n");
+    if (isNodeType(node, "bulletlist", "orderedlist"))
+        return renderList(node);
+    return inline(node.content);
+}
 function renderNote(comment) {
     const content = comment.body_json?.content;
     if (!Array.isArray(content))
         return typeof comment.body === "string" ? comment.body.trim() : "";
-    return content.map((node) => node.type !== "blockquote" ? inline(node.content) : (node.content ?? []).map((child) => toBlockquote(inline(child.content))).join("\n\n")).join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
+    return content.map(renderBlock).join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 function attachmentType(value) { return typeof value === "object" && value !== null && !Array.isArray(value); }
 // A restack ("post" attachment) carries the quoted excerpt in postSelection.text and the canonical link in post.canonical_url.
