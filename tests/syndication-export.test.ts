@@ -138,6 +138,53 @@ test("exports a restack Note with its quoted selection and canonical link", asyn
   }]);
 });
 
+test("exports Note lists with one item per line and plain-text markers", async () => {
+  const listItem = (text: string) => ({ type: "listItem", content: [{ type: "paragraph", content: [{ type: "text", text }] }] });
+  const server = await withHttpServer((request, response) => {
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({ items: [{ comment: {
+      id: 317542792,
+      user_id: 9744387,
+      type: "feed",
+      ancestor_path: "",
+      date: "2026-08-18T19:21:31.868Z",
+      body_json: { content: [
+        { type: "paragraph", content: [{ type: "text", text: "Like, " }] },
+        { type: "bulletList", content: [
+          listItem("entire xai team is fired"),
+          listItem("cursor acquisition / partnership announced"),
+          { type: "listItem", content: [
+            { type: "paragraph", content: [{ type: "text", text: "suddenly a new grok model appears" }] },
+            { type: "bullet_list", content: [listItem("fast")] },
+          ] },
+        ] },
+        { type: "orderedList", attrs: { start: 2 }, content: [listItem("second"), listItem("third")] },
+        { type: "paragraph", content: [{ type: "text", text: "seems like its just composer?" }] },
+      ] },
+      attachments: [],
+    } }] }));
+  });
+  closers.push(server.close);
+  const { output } = await tempOutput("lists.json");
+
+  const result = await runCli(["--account-origin", server.origin, "note", "export", "--user-id", "9744387", "--note-id", "317542792", "--output", output]);
+
+  expect(result.code).toBe(0);
+  expect(JSON.parse(await readFile(output, "utf8")).posts[0].text).toBe([
+    "Like, ",
+    "",
+    "- entire xai team is fired",
+    "- cursor acquisition / partnership announced",
+    "- suddenly a new grok model appears",
+    "  - fast",
+    "",
+    "2. second",
+    "3. third",
+    "",
+    "seems like its just composer?",
+  ].join("\n"));
+});
+
 test("a forced Note id is exported even when it is outside the lookback window", async () => {
   const server = await withHttpServer((request, response) => {
     expect(request.url).toBe("/api/v1/reader/feed/profile/9744387?types=note&limit=20");
