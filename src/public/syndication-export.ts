@@ -104,7 +104,15 @@ async function youtubeTitle(watchUrl: string): Promise<string | undefined> {
   } catch { return undefined; }
 }
 
-function inline(nodes: NoteNode[] = []): string { return nodes.map((node) => node.type === "text" ? typeof node.text === "string" ? node.text : "" : /hard_?break/i.test(String(node.type)) ? "\n" : inline(node.content)).join(""); }
+function inline(nodes: NoteNode[] = []): string { return nodes.map((node) => node.type === "text" ? typeof node.text === "string" ? node.text : "" : /hard_?break/i.test(String(node.type)) ? "\n" : mention(node) ?? inline(node.content)).join(""); }
+// A mention is a childless leaf node whose visible name lives in attrs.label, so without this the
+// name vanishes and the sentence loses its subject (" was not amused"). Emit the bare label: the
+// Substack profile it points at has no known X handle, and guessing one would tag a stranger.
+function mention(node: NoteNode): string | undefined {
+  if (!isNodeType(node, "substackmention", "mention")) return undefined;
+  const label = node.attrs?.label ?? node.attrs?.name;
+  return typeof label === "string" && label.trim() ? label.trim() : undefined;
+}
 // Prefix every line of quoted text with a leading ">" per our quote-syndication convention (blank lines become a bare ">").
 function toBlockquote(text: string): string { return text.split("\n").map((line) => line ? `> ${line}` : ">").join("\n"); }
 // Substack has used both camelCase ("bulletList") and snake_case ("bullet_list") node names across schema versions.

@@ -185,6 +185,34 @@ test("exports Note lists with one item per line and plain-text markers", async (
   ].join("\n"));
 });
 
+test("exports Note mentions as their visible label", async () => {
+  const server = await withHttpServer((request, response) => {
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({ items: [{ comment: {
+      id: 317531633,
+      user_id: 9744387,
+      type: "feed",
+      ancestor_path: "",
+      date: "2026-08-18T19:04:08.618Z",
+      body_json: { content: [
+        { type: "paragraph", content: [{ type: "text", text: "me to the team" }] },
+        { type: "paragraph", content: [
+          { type: "substack_mention", attrs: { id: 50747867, label: "Clifford", mentionType: "user", url: null } },
+          { type: "text", text: " was not amused" },
+        ] },
+      ] },
+      attachments: [],
+    } }] }));
+  });
+  closers.push(server.close);
+  const { output } = await tempOutput("mention.json");
+
+  const result = await runCli(["--account-origin", server.origin, "note", "export", "--user-id", "9744387", "--note-id", "317531633", "--output", output]);
+
+  expect(result.code).toBe(0);
+  expect(JSON.parse(await readFile(output, "utf8")).posts[0].text).toBe("me to the team\n\nClifford was not amused");
+});
+
 test("a forced Note id is exported even when it is outside the lookback window", async () => {
   const server = await withHttpServer((request, response) => {
     expect(request.url).toBe("/api/v1/reader/feed/profile/9744387?types=note&limit=20");
