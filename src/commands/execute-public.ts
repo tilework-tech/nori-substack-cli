@@ -34,9 +34,5 @@ export async function executePublicCommand(family: string, operation: string, op
   if (family === "profile" && operation === "get") return { data: await client.getProfile(accountOrigin, stringOption(options, "userId"), stringOption(options, "handle")) };
   if (family === "discover" && operation === "categories") return { data: await client.categories(accountOrigin) };
   if (family === "discover" && operation === "search") return { data: await client.search(accountOrigin, stringOption(options, "query")) };
-  if (family === "profile" && operation === "linkedin") {
-    const token = typeof globals.developerToken === "string" ? globals.developerToken : process.env.SUBSTACK_DEVELOPER_TOKEN;
-    return { data: await client.lookupLinkedin(accountOrigin, stringOption(options, "handle"), token) };
-  }
   throw new CliError("UNSUPPORTED_COMMAND", `Unsupported public command: ${family} ${operation}.`, 2, false, { family, operation });
 }

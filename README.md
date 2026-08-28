@@ -1,6 +1,6 @@
 # nori-substack-cli
 
-Agent-first CLI for reading and operating Substack. It combines stable public feeds and JSON endpoints, Substack's narrow official developer API, and authenticated web endpoints backed by Playwright browser storage state.
+Agent-first CLI for reading and operating Substack. It combines stable public feeds and JSON endpoints with authenticated web endpoints backed by Playwright browser storage state.
 
 The CLI is non-interactive, emits JSON by default, never uses color or spinners, and exposes source locations in recursive help.
 
@@ -37,12 +37,6 @@ nori-substack post get --publication-url https://example.substack.com --post-id 
 nori-substack comment list --publication-url https://example.substack.com --post-id 123
 nori-substack discover categories
 nori-substack discover search --query "climate"
-```
-
-The official LinkedIn-handle lookup accepts either `--developer-token` or `SUBSTACK_DEVELOPER_TOKEN`:
-
-```bash
-nori-substack --developer-token "$SUBSTACK_DEVELOPER_TOKEN" profile linkedin --handle alice
 ```
 
 ## Portable syndication exports
@@ -113,7 +107,7 @@ nori-substack auth host --stop --confirm
 
 ## Authenticated command families
 
-- `profile`: authenticated identity and public/official profile lookup
+- `profile`: authenticated identity and public profile lookup
 - `publication`: owned publications, search, settings, metadata updates, sections, pages, users, tags, and exports
 - `post`: public posts and portable exports, drafts, create/update/delete, publish, schedule, and statistics
 - `note`: feed, profiles, portable exports, details, drafts, create, reply, delete, and seen state
@@ -159,7 +153,7 @@ Errors go to stderr as structured JSON with stable codes, retry guidance, and cr
 
 ## Stability and limitations
 
-Public RSS/JSON reads are the most stable surface. When Substack forbids the former public publication JSON endpoint, `publication get` extracts the same publication object from the public homepage preload. The official developer API is currently narrow. Most authenticated management commands call undocumented Substack web endpoints and may drift without notice; HTTP failures are returned explicitly rather than treated as success.
+Public RSS/JSON reads are the most stable surface. When Substack forbids the former public publication JSON endpoint, `publication get` extracts the same publication object from the public homepage preload. Most authenticated management commands call undocumented Substack web endpoints and may drift without notice; HTTP failures are returned explicitly rather than treated as success.
 
 The CLI does not automate captchas, publication creation, magic-link email retrieval, or unmapped direct-message sending. Hosted auth orchestrates a browser for a human; it does not bypass challenges. Live mutation tests require a designated test publication and are intentionally not part of the default suite.
 

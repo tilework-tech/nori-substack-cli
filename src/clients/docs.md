@@ -22,7 +22,6 @@ Path: @/src/clients
 ### Things to Know
 
 - Publication custom domains are supported by deriving endpoints from the supplied origin.
-- Official developer-token lookup is separate from browser-session authentication.
 - Authenticated web endpoints are undocumented and should be verified when changed.
 
 Created and maintained by Nori.

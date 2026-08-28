@@ -39,15 +39,6 @@ async function publicationFromHomepage(publicationUrl: string): Promise<unknown>
 }
 
 
-async function fetchOfficial(url: URL, token?: string): Promise<unknown> {
-  let response: Response;
-  try { response = await fetch(url, { headers: { accept: "application/json", "user-agent": "nori-substack-cli/0.1", ...(token ? { authorization: `Bearer ${token}` } : {}) } }); }
-  catch (error) { throw new CliError("NETWORK_ERROR", `Unable to reach Substack: ${error instanceof Error ? error.message : String(error)}`, 8, true); }
-  const text = await response.text();
-  if (!response.ok) throw new CliError("HTTP_ERROR", `Substack request failed with HTTP ${response.status}.`, 8, response.status >= 500, { status: response.status });
-  try { return JSON.parse(text); } catch { throw new CliError("INVALID_RESPONSE", "Substack returned invalid JSON.", 8); }
-}
-
 export class PublicClient {
   async getPublication(publicationUrl: string): Promise<unknown> {
     try { return await getJson(endpoint(publicationUrl, "/api/v1/publication")); }
@@ -65,7 +56,6 @@ export class PublicClient {
   async getProfile(accountOrigin: string, userId: string, handle: string): Promise<unknown> { return getJson(endpoint(accountOrigin, `/api/v1/user/${encodeURIComponent(userId)}-${encodeURIComponent(handle.replace(/^@/, ""))}/public_profile/self`)); }
   async categories(accountOrigin: string): Promise<unknown> { return getJson(endpoint(accountOrigin, "/api/v1/categories")); }
   async search(accountOrigin: string, query: string): Promise<unknown> { return getJson(endpoint(accountOrigin, "/api/v1/search/explore/web"), { query: [["query", query]] }); }
-  async lookupLinkedin(accountOrigin: string, handle: string, developerToken?: string): Promise<unknown> { return fetchOfficial(endpoint(accountOrigin, `/profile/search/linkedin/${encodeURIComponent(handle.replace(/^@/, ""))}`), developerToken); }
   async getFeed(publicationUrl: string): Promise<unknown> {
     const xml = await fetchText(endpoint(publicationUrl, "/feed"));
     const $ = load(xml, { xmlMode: true });

@@ -6,7 +6,7 @@ Path: @/
 
 - Provides a non-interactive, JSON-first CLI for authenticated and unauthenticated Substack workflows.
 - Owns Substack retrieval and normalization for versioned, source-neutral Article and post artifacts.
-- Combines public RSS/JSON reads, the official developer-token lookup, cookie-authenticated web endpoints, and human-assisted browser authentication.
+- Combines public RSS/JSON reads, cookie-authenticated web endpoints, and human-assisted browser authentication.
 
 ### How it fits into the larger codebase
 
