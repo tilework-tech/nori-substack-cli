@@ -55,7 +55,6 @@ export function createProgram() {
         .option("--state-env <name>", "Environment variable containing base64 storage state.", "NORIAGENT_SUBSTACK_STORAGE_B64")
         .option("--account-origin <url>", "Substack account origin.", "https://substack.com")
         .option("--browser <path>", "Chromium executable path for hosted authentication.")
-        .option("--developer-token <token>", "Official Substack developer API token.")
         .addOption(new Option("--format <format>", "Output format.").choices(["json", "text"]).default("json"))
         .configureOutput({ getOutHasColors: () => false, getErrHasColors: () => false })
         .exitOverride().addHelpText("after", `\nSource: ${ROOT_SOURCE}\n`);

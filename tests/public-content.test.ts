@@ -38,16 +38,15 @@ test("gets a public post by id", async () => {
   expect(JSON.parse(result.stdout).data.post.title).toBe("Public");
 });
 
-test("uses the official developer-token LinkedIn profile lookup without account cookies", async () => {
-  const server = await withHttpServer((request, response) => {
-    expect(request.url).toBe("/profile/search/linkedin/alice");
-    expect(request.headers.authorization).toBe("Bearer dev-token");
-    expect(request.headers.cookie).toBeUndefined();
-    response.setHeader("content-type", "application/json");
-    response.end(JSON.stringify({ results: [{ identityHandle: "alice" }] }));
-  });
-  closers.push(server.close);
-  const result = await runCli(["--account-origin", server.origin, "--developer-token", "dev-token", "profile", "linkedin", "--handle", "alice"]);
-  expect(result.code).toBe(0);
-  expect(JSON.parse(result.stdout).data.results[0].identityHandle).toBe("alice");
+test("does not expose the LinkedIn profile lookup or its developer token", async () => {
+  const topLevel = await runCli(["--help"]);
+  expect(topLevel.stdout).not.toMatch(/developer-token/);
+
+  const profileHelp = await runCli(["profile", "--help"]);
+  expect(profileHelp.code).toBe(0);
+  expect(profileHelp.stdout).toMatch(/\bget\b/);
+  expect(profileHelp.stdout).not.toMatch(/linkedin/i);
+
+  const invoked = await runCli(["profile", "linkedin", "--handle", "alice"]);
+  expect(invoked.code).not.toBe(0);
 });

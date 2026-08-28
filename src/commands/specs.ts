@@ -25,7 +25,6 @@ export const commandFamilies: readonly FamilySpec[] = [
   { name: "profile", description: "Inspect Substack profiles.", operations: [
     { name: "me", description: "Use this command to read the authenticated profile." },
     { name: "get", description: "Use this command to read a public profile.", options: [opt("--user-id <id>", "Numeric user identifier.", true), opt("--handle <handle>", "Substack handle.", true)] },
-    { name: "linkedin", description: "Use this command to find profiles by LinkedIn handle.", options: [opt("--handle <handle>", "LinkedIn handle.", true)] },
   ] },
   { name: "publication", description: "Inspect and manage publications.", operations: [
     { name: "get", description: "Use this command to get a public Substack publication.", options: [opt("--url <url>", "Substack publication URL.", true)] },

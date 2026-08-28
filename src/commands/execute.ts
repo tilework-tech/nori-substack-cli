@@ -8,7 +8,7 @@ export async function executeCommand(family: string, operation: string, options:
   const publicOperation = (family === "publication" && ["get", "feed", "archive"].includes(operation))
     || (family === "post" && ["list", "get", "export"].includes(operation))
     || (family === "note" && operation === "export")
-    || (family === "profile" && ["get", "linkedin"].includes(operation))
+    || (family === "profile" && operation === "get")
     || (family === "comment" && operation === "list")
     || family === "discover";
   if (publicOperation) return executePublicCommand(family, operation, options, globals);

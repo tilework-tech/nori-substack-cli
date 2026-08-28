@@ -13,6 +13,5 @@ export declare class PublicClient {
     getProfile(accountOrigin: string, userId: string, handle: string): Promise<unknown>;
     categories(accountOrigin: string): Promise<unknown>;
     search(accountOrigin: string, query: string): Promise<unknown>;
-    lookupLinkedin(accountOrigin: string, handle: string, developerToken?: string): Promise<unknown>;
     getFeed(publicationUrl: string): Promise<unknown>;
 }

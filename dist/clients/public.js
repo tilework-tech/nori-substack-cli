@@ -57,24 +57,6 @@ async function publicationFromHomepage(publicationUrl) {
     }
     throw new CliError("INVALID_RESPONSE", "Substack homepage did not contain publication preload metadata.", 8, false);
 }
-async function fetchOfficial(url, token) {
-    let response;
-    try {
-        response = await fetch(url, { headers: { accept: "application/json", "user-agent": "nori-substack-cli/0.1", ...(token ? { authorization: `Bearer ${token}` } : {}) } });
-    }
-    catch (error) {
-        throw new CliError("NETWORK_ERROR", `Unable to reach Substack: ${error instanceof Error ? error.message : String(error)}`, 8, true);
-    }
-    const text = await response.text();
-    if (!response.ok)
-        throw new CliError("HTTP_ERROR", `Substack request failed with HTTP ${response.status}.`, 8, response.status >= 500, { status: response.status });
-    try {
-        return JSON.parse(text);
-    }
-    catch {
-        throw new CliError("INVALID_RESPONSE", "Substack returned invalid JSON.", 8);
-    }
-}
 export class PublicClient {
     async getPublication(publicationUrl) {
         try {
@@ -95,7 +77,6 @@ export class PublicClient {
     async getProfile(accountOrigin, userId, handle) { return getJson(endpoint(accountOrigin, `/api/v1/user/${encodeURIComponent(userId)}-${encodeURIComponent(handle.replace(/^@/, ""))}/public_profile/self`)); }
     async categories(accountOrigin) { return getJson(endpoint(accountOrigin, "/api/v1/categories")); }
     async search(accountOrigin, query) { return getJson(endpoint(accountOrigin, "/api/v1/search/explore/web"), { query: [["query", query]] }); }
-    async lookupLinkedin(accountOrigin, handle, developerToken) { return fetchOfficial(endpoint(accountOrigin, `/profile/search/linkedin/${encodeURIComponent(handle.replace(/^@/, ""))}`), developerToken); }
     async getFeed(publicationUrl) {
         const xml = await fetchText(endpoint(publicationUrl, "/feed"));
         const $ = load(xml, { xmlMode: true });
