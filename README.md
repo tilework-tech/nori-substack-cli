@@ -6,10 +6,10 @@ The CLI is non-interactive, emits JSON by default, never uses color or spinners,
 
 ## Install
 
-Requires Node.js 18.18 or newer and access to the private Tilework Tech repository.
+Requires Node.js 18.18 or newer.
 
 ```bash
-npm install -g git+ssh://git@github.com/tilework-tech/nori-substack-cli.git
+npm install -g github:tilework-tech/nori-substack-cli
 nori-substack --version
 ```
 
@@ -165,4 +165,6 @@ The CLI does not automate captchas, publication creation, magic-link email retri
 - Non-idempotent writes are not automatically retried.
 - Credential state, environment files, and package archives are excluded from Git; compiled `dist/` is intentionally tracked for Git consumers.
 
-This repository is private and unlicensed (`UNLICENSED`).
+## License
+
+Licensed under the [Apache License 2.0](LICENSE), with the additional terms in [LICENSE-ADDENDUM.txt](LICENSE-ADDENDUM.txt).

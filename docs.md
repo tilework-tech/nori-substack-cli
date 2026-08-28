@@ -12,7 +12,7 @@ Path: @/
 
 - Follows the Nori agentic CLI contract vendored under `@/.claude/skills`.
 - Gives triggers portable artifacts while leaving destination selection, approval, deduplication, and publishing outside this CLI.
-- Is installable directly from the private GitHub repository and bundles both compiled JavaScript and TypeScript source.
+- Is installable directly from the public GitHub repository and bundles both compiled JavaScript and TypeScript source.
 - Uses Substack publication hosts for publication-scoped operations and the account host for global reader/profile operations.
 - Treats Playwright storage state as the authenticated credential boundary.
 
