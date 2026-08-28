@@ -3,8 +3,7 @@
   "version": "0.1.0",
   "description": "Agent-first CLI for authenticated and unauthenticated Substack operations",
   "type": "module",
-  "private": true,
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "bin": {
     "nori-substack": "./dist/index.js"
   },
