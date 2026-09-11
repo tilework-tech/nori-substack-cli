@@ -60,6 +60,36 @@ test("exports a public Substack post as a portable article bundle", async () => 
   expect(bundle.html).not.toContain("button-wrapper");
 });
 
+test("exports all gallery photos in article order, with the shared caption once", async () => {
+  const gallery = { images: Array.from({ length: 6 }, (_, i) => ({ type: "image/jpeg", src: `https://cdn.example/photo-${i}.jpeg` })), caption: "Photos & <friends>", staticGalleryImage: { src: "https://cdn.example/composite.png" } };
+  const attrs = JSON.stringify({ gallery, isEditorNode: true }).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  const server = await withHttpServer((_request, response) => {
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({ title: "Gallery", body_html: `<div class="captioned-image-container"><img src="https://cdn.example/before.png"></div><p>Before gallery.</p><div class="image-gallery-embed" data-attrs="${attrs}"></div><p>After gallery.</p><div class="captioned-image-container"><img src="https://cdn.example/after.png"></div>` }));
+  });
+  closers.push(server.close);
+  const { output } = await tempOutput("gallery.json");
+  const result = await runCli(["post", "export", "--url", `${server.origin}/p/gallery`, "--output", output]);
+  expect(result.code).toBe(0);
+  const bundle = JSON.parse(await readFile(output, "utf8"));
+  expect(bundle.images.map((image: { url: string }) => image.url)).toEqual(["https://cdn.example/before.png", ...gallery.images.map(image => image.src), "https://cdn.example/after.png"]);
+  expect(bundle.html).toBe(`<p>[[NORI_IMAGE:0]]</p><p>Before gallery.</p>${gallery.images.map((_, i) => `<p>[[NORI_IMAGE:${i + 1}]]</p>`).join("")}<p><em>Photos &amp; &lt;friends&gt;</em></p><p>After gallery.</p><p>[[NORI_IMAGE:7]]</p>`);
+  expect(JSON.stringify(bundle)).not.toContain("composite.png");
+});
+
+test.each(["{", "{}", JSON.stringify({ gallery: { images: [{ src: "" }] } })])("rejects malformed gallery data instead of silently dropping photos: %s", async attrs => {
+  const server = await withHttpServer((_request, response) => {
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({ title: "Gallery", body_html: `<p>Body.</p><div class="image-gallery-embed" data-attrs='${attrs}'></div>` }));
+  });
+  closers.push(server.close);
+  const { output } = await tempOutput("invalid-gallery.json");
+  const result = await runCli(["post", "export", "--url", `${server.origin}/p/gallery`, "--output", output]);
+  expect(result.code).not.toBe(0);
+  expect(JSON.parse(result.stderr).error.code).toBe("INVALID_RESPONSE");
+  await expect(readFile(output)).rejects.toThrow();
+});
+
 test("exports only recent top-level Notes from the requested author", async () => {
   const now = Date.now();
   const note = (overrides: Record<string, unknown>) => ({

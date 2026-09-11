@@ -40,7 +40,33 @@ export async function exportPostArtifact(client, postUrl) {
         parent.replaceWith("<p>[[NORI_DIVIDER]]</p>"); });
     $("a.footnote-anchor").each((_index, element) => { $(element).replaceWith(`[${$(element).text().trim()}]`); });
     $("div.footnote").each((_index, element) => { const number = $(element).find(".footnote-number").text().trim(); const body = $(element).find(".footnote-content").text().trim().replace(/\s+/g, " "); $(element).replaceWith(`<p>[${number}] ${body}</p>`); });
-    $(".captioned-image-container").each((_index, element) => {
+    $(".captioned-image-container,.image-gallery-embed").each((_index, element) => {
+        if ($(element).is(".image-gallery-embed")) {
+            // Galleries are empty divs: the original photos live in entity-encoded
+            // data-attrs JSON, not img tags. Keep their source order and one shared
+            // caption; staticGalleryImage is a composite fallback, not another photo.
+            let gallery;
+            try {
+                gallery = JSON.parse($(element).attr("data-attrs") ?? "").gallery;
+                if (!gallery || !Array.isArray(gallery.images) || gallery.images.length === 0 ||
+                    gallery.images.some((image) => !image || typeof image.src !== "string" || !/^https?:\/\//.test(image.src)))
+                    throw new Error();
+                if (gallery.caption !== undefined && typeof gallery.caption !== "string")
+                    throw new Error();
+            }
+            catch {
+                throw new CliError("INVALID_RESPONSE", "Substack image gallery is missing valid image data; refusing to omit it from the export.", 8);
+            }
+            const markers = gallery.images.map((image) => {
+                const marker = `[[NORI_IMAGE:${images.length}]]`;
+                images.push({ url: image.src, caption: "" });
+                return `<p>${marker}</p>`;
+            });
+            if (gallery.caption)
+                markers.push(`<p><em>${escapeHtml(gallery.caption)}</em></p>`);
+            $(element).replaceWith(markers.join(""));
+            return;
+        }
         const url = $(element).find("img").first().attr("src") ?? "";
         if (!url || url.includes("missing-image")) {
             $(element).remove();
@@ -49,7 +75,7 @@ export async function exportPostArtifact(client, postUrl) {
         const caption = $(element).find("figcaption,.image-caption").first().text().trim();
         const marker = `[[NORI_IMAGE:${images.length}]]`;
         images.push({ url, caption });
-        $(element).replaceWith(`<p>${marker}</p>${caption ? `<p><em>${caption}</em></p>` : ""}`);
+        $(element).replaceWith(`<p>${marker}</p>${caption ? `<p><em>${escapeHtml(caption)}</em></p>` : ""}`);
     });
     // Video embeds. X Articles cannot embed external players (the composer's Insert
     // menu has no video/embed option), so preserve each embed as a link rather than
