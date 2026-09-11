@@ -16,7 +16,7 @@ Path: @/src/public
 
 ### Core Implementation
 
-- Article export parses custom-domain `/p/<slug>` URLs, cleans subscription UI, and emits divider and image markers.
+- Article export parses custom-domain `/p/<slug>` URLs, cleans subscription UI, and emits divider and image markers. Galleries decode `data-attrs.gallery.images` in article order; the shared caption appears once and the composite fallback is excluded. Invalid gallery data fails the export instead of dropping images.
 - Note export follows public profile cursors until a forced ID or lookback boundary is reached.
 - Note filtering requires the requested author, a top-level feed entity, and either the time window or exact forced ID.
 - Article artifacts use `kind: "article"`; Note candidates use a source-neutral `kind: "posts"` collection.
