@@ -21,7 +21,26 @@ export async function exportPostArtifact(client, postUrl) {
     const $ = load(stringField(post.body_html, "body_html"), { xmlMode: false });
     const images = [];
     const videos = [];
-    $(".subscription-widget,.subscription-widget-subscribe,.preamble,form,.fake-button,.digest-post-embed,.highlighted_code_block,[data-component-name='AssetErrorToDOM']").remove();
+    // Substack post cards are divs whose link and title live only in data-attrs.
+    // X cannot render the card, but dropping the div also drops the linked source.
+    $(".digest-post-embed").each((_index, element) => {
+        const node = $(element);
+        const rawAttributes = node.attr("data-attrs");
+        let attributes;
+        try {
+            const parsedAttributes = rawAttributes ? JSON.parse(rawAttributes) : undefined;
+            if (parsedAttributes && typeof parsedAttributes === "object" && !Array.isArray(parsedAttributes))
+                attributes = parsedAttributes;
+        }
+        catch { /* A malformed card has no safe portable representation. */ }
+        const href = typeof attributes?.canonical_url === "string" ? attributes.canonical_url : node.find("a[href]").first().attr("href") ?? "";
+        const title = typeof attributes?.title === "string" && attributes.title.trim() ? attributes.title.trim() : node.find("a[href]").first().text().replace(/\s+/g, " ").trim() || href;
+        if (/^https?:\/\//.test(href) && title)
+            node.replaceWith(`<p><a href="${escapeHtml(href)}">${escapeHtml(title)}</a></p>`);
+        else
+            node.remove();
+    });
+    $(".subscription-widget,.subscription-widget-subscribe,.preamble,form,.fake-button,.highlighted_code_block,[data-component-name='AssetErrorToDOM']").remove();
     $("p").each((_index, element) => { const text = $(element).text(); if (/Thanks for reading/.test(text) && /Subscribe/.test(text))
         $(element).remove(); });
     // CTA buttons (e.g. event signup) render as <p class="button-wrapper"><a class="button" href>…</a></p>.
