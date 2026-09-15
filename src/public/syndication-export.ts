@@ -5,6 +5,9 @@ import { CliError } from "../core/errors.js";
 interface ArticlePost { title?: unknown; canonical_url?: unknown; cover_image?: unknown; body_html?: unknown }
 interface NoteNode { type?: unknown; text?: unknown; attrs?: Record<string, unknown>; content?: NoteNode[] }
 interface NoteComment { id?: unknown; user_id?: unknown; type?: unknown; ancestor_path?: unknown; date?: unknown; body?: unknown; body_json?: { content?: NoteNode[] }; attachments?: unknown[] }
+interface NoteMentionSource { label: string; substackId?: string; mentionType?: string }
+interface NoteMention extends NoteMentionSource { start: number; end: number; offsetUnit: "utf16" }
+interface NoteRenderContext { mentions: NoteMentionSource[] }
 
 function stringField(value: unknown, name: string): string {
   if (typeof value !== "string") throw new CliError("INVALID_RESPONSE", `Substack post did not contain ${name}.`, 8);
@@ -119,14 +122,46 @@ async function youtubeTitle(watchUrl: string): Promise<string | undefined> {
   } catch { return undefined; }
 }
 
-function inline(nodes: NoteNode[] = []): string { return nodes.map((node) => node.type === "text" ? typeof node.text === "string" ? node.text : "" : /hard_?break/i.test(String(node.type)) ? "\n" : mention(node) ?? inline(node.content)).join(""); }
-// A mention is a childless leaf node whose visible name lives in attrs.label, so without this the
-// name vanishes and the sentence loses its subject (" was not amused"). Emit the bare label: the
-// Substack profile it points at has no known X handle, and guessing one would tag a stranger.
-function mention(node: NoteNode): string | undefined {
+const MENTION_MARKER = /\uE000NORI_MENTION:(\d+)\uE001/g;
+
+function inline(nodes: NoteNode[] = [], context: NoteRenderContext): string {
+  return nodes.map((node) => node.type === "text"
+    ? typeof node.text === "string" ? node.text : ""
+    : /hard_?break/i.test(String(node.type))
+      ? "\n"
+      : mention(node, context) ?? inline(node.content, context)).join("");
+}
+// A mention is a childless leaf node whose visible name lives in attrs.label. Keep the visible
+// text unchanged, but retain the structured source signal so downstream workflows can distinguish
+// an explicit Substack mention from the same name appearing as ordinary prose.
+function mention(node: NoteNode, context: NoteRenderContext): string | undefined {
   if (!isNodeType(node, "substackmention", "mention")) return undefined;
   const label = node.attrs?.label ?? node.attrs?.name;
-  return typeof label === "string" && label.trim() ? label.trim() : undefined;
+  if (typeof label !== "string" || !label.trim()) return undefined;
+  const source: NoteMentionSource = { label: label.trim() };
+  const substackId = node.attrs?.id;
+  if (typeof substackId === "string" || typeof substackId === "number") source.substackId = String(substackId);
+  if (typeof node.attrs?.mentionType === "string") source.mentionType = node.attrs.mentionType;
+  const index = context.mentions.push(source) - 1;
+  return `\uE000NORI_MENTION:${index}\uE001`;
+}
+
+function materializeMentions(textWithMarkers: string, sources: NoteMentionSource[]): { text: string; mentions: NoteMention[] } {
+  let text = "";
+  let cursor = 0;
+  const mentions: NoteMention[] = [];
+  MENTION_MARKER.lastIndex = 0;
+  for (let match = MENTION_MARKER.exec(textWithMarkers); match; match = MENTION_MARKER.exec(textWithMarkers)) {
+    const source = sources[Number(match[1])];
+    if (!source) continue;
+    text += textWithMarkers.slice(cursor, match.index);
+    const start = text.length;
+    text += source.label;
+    mentions.push({ ...source, start, end: text.length, offsetUnit: "utf16" });
+    cursor = match.index + match[0].length;
+  }
+  text += textWithMarkers.slice(cursor);
+  return { text, mentions };
 }
 // Prefix every line of quoted text with a leading ">" per our quote-syndication convention (blank lines become a bare ">").
 function toBlockquote(text: string): string { return text.split("\n").map((line) => line ? `> ${line}` : ">").join("\n"); }
@@ -137,26 +172,28 @@ function isNodeType(node: NoteNode, ...names: string[]): boolean {
 }
 // X has no list formatting, so a list has to carry its own plain-text markers. Without them every
 // item collapses into one run-on line ("entire xai team is firedcursor acquisition ...").
-function renderList(node: NoteNode): string {
+function renderList(node: NoteNode, context: NoteRenderContext): string {
   const ordered = isNodeType(node, "orderedlist");
   const start = typeof node.attrs?.start === "number" ? node.attrs.start : 1;
   return (node.content ?? []).map((item, index) => {
     const marker = ordered ? `${start + index}. ` : "- ";
     // Nested lists hang off the same item, so keep an item's blocks on adjacent lines and indent
     // continuation lines under the marker.
-    const [first = "", ...rest] = (item.content ?? []).map(renderBlock).filter(Boolean).join("\n").split("\n");
+    const [first = "", ...rest] = (item.content ?? []).map((child) => renderBlock(child, context)).filter(Boolean).join("\n").split("\n");
     return [`${marker}${first}`, ...rest.map((line) => line ? `  ${line}` : line)].join("\n");
   }).join("\n");
 }
-function renderBlock(node: NoteNode): string {
-  if (isNodeType(node, "blockquote")) return (node.content ?? []).map((child) => toBlockquote(inline(child.content))).join("\n\n");
-  if (isNodeType(node, "bulletlist", "orderedlist")) return renderList(node);
-  return inline(node.content);
+function renderBlock(node: NoteNode, context: NoteRenderContext): string {
+  if (isNodeType(node, "blockquote")) return (node.content ?? []).map((child) => toBlockquote(inline(child.content, context))).join("\n\n");
+  if (isNodeType(node, "bulletlist", "orderedlist")) return renderList(node, context);
+  return inline(node.content, context);
 }
-function renderNote(comment: NoteComment): string {
+function renderNote(comment: NoteComment): { text: string; mentions: NoteMention[] } {
   const content = comment.body_json?.content;
-  if (!Array.isArray(content)) return typeof comment.body === "string" ? comment.body.trim() : "";
-  return content.map(renderBlock).join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
+  if (!Array.isArray(content)) return { text: typeof comment.body === "string" ? comment.body.trim() : "", mentions: [] };
+  const context: NoteRenderContext = { mentions: [] };
+  const textWithMarkers = content.map((node) => renderBlock(node, context)).join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
+  return materializeMentions(textWithMarkers, context.mentions);
 }
 function attachmentType(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
 // A restack ("post" attachment) carries the quoted excerpt in postSelection.text and the canonical link in post.canonical_url.
@@ -193,14 +230,21 @@ export async function exportNotesArtifact(client: PublicClient, options: { accou
     const images = attachments.filter((attachment) => attachment.type === "image" && typeof attachment.imageUrl === "string").map((attachment) => attachment.imageUrl as string);
     const links = attachments.filter((attachment) => attachment.type === "link" && attachmentType(attachment.linkMetadata) && typeof attachment.linkMetadata.url === "string").map((attachment) => (attachment.linkMetadata as Record<string, unknown>).url as string);
     const restacks = attachments.filter((attachment) => attachment.type === "post").map(renderRestack);
-    let text = renderNote(comment);
+    const rendered = renderNote(comment);
+    let text = rendered.text;
     for (const restack of restacks) {
       if (restack.quote && !text.includes(restack.quote)) text = text ? `${text}\n\n${toBlockquote(restack.quote)}` : toBlockquote(restack.quote);
       if (restack.url && !text.includes(restack.url)) text = text ? `${text}\n\n${restack.url}` : restack.url;
     }
     for (const url of links) if (!text.includes(url)) text = text ? `${text}\n\n${url}` : url;
-    return { id: String(comment.id), text, images, publishedAt: stringField(comment.date, "date") };
+    return {
+      id: String(comment.id),
+      text,
+      images,
+      publishedAt: stringField(comment.date, "date"),
+      ...(rendered.mentions.length > 0 ? { mentions: rendered.mentions } : {}),
+    };
   }).sort((left, right) => Date.parse(left.publishedAt) - Date.parse(right.publishedAt));
   if (options.noteId && notes.length === 0) throw new CliError("NOT_FOUND", `Note ${options.noteId} was not found in the public profile feed.`, 8, false);
-  return { version: 1, kind: "posts", posts: notes };
+  return { version: 1, kind: "posts", capabilities: ["substack-mention-spans-v1"], posts: notes };
 }
