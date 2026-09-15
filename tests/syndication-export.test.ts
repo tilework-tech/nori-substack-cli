@@ -98,7 +98,7 @@ test("exports only recent top-level Notes from the requested author", async () =
 
   expect(result.code).toBe(0);
   const artifact = JSON.parse(await readFile(output, "utf8"));
-  expect(artifact).toMatchObject({ version: 1, kind: "posts" });
+  expect(artifact).toMatchObject({ version: 1, kind: "posts", capabilities: ["substack-mention-spans-v1"] });
   expect(artifact.posts).toEqual([{
     id: "101",
     text: "intro\n\n> quoted\n\nhttps://example.com/read",
@@ -187,7 +187,7 @@ test("exports Note lists with one item per line and plain-text markers", async (
   ].join("\n"));
 });
 
-test("exports Note mentions as their visible label", async () => {
+test("exports explicit Note mentions as structured spans without marking plain names", async () => {
   const server = await withHttpServer((request, response) => {
     response.setHeader("content-type", "application/json");
     response.end(JSON.stringify({ items: [{ comment: {
@@ -197,10 +197,10 @@ test("exports Note mentions as their visible label", async () => {
       ancestor_path: "",
       date: "2026-08-18T19:04:08.618Z",
       body_json: { content: [
-        { type: "paragraph", content: [{ type: "text", text: "me to the team" }] },
+        { type: "paragraph", content: [{ type: "text", text: "Plain Clifford and 😀" }] },
         { type: "paragraph", content: [
           { type: "substack_mention", attrs: { id: 50747867, label: "Clifford", mentionType: "user", url: null } },
-          { type: "text", text: " was not amused" },
+          { type: "text", text: " was not amused by Clifford" },
         ] },
       ] },
       attachments: [],
@@ -212,7 +212,20 @@ test("exports Note mentions as their visible label", async () => {
   const result = await runCli(["--account-origin", server.origin, "note", "export", "--user-id", "9744387", "--note-id", "317531633", "--output", output]);
 
   expect(result.code).toBe(0);
-  expect(JSON.parse(await readFile(output, "utf8")).posts[0].text).toBe("me to the team\n\nClifford was not amused");
+  expect(JSON.parse(await readFile(output, "utf8")).posts[0]).toEqual({
+    id: "317531633",
+    text: "Plain Clifford and 😀\n\nClifford was not amused by Clifford",
+    images: [],
+    publishedAt: "2026-08-18T19:04:08.618Z",
+    mentions: [{
+      label: "Clifford",
+      substackId: "50747867",
+      mentionType: "user",
+      start: 23,
+      end: 31,
+      offsetUnit: "utf16",
+    }],
+  });
 });
 
 test("a forced Note id is exported even when it is outside the lookback window", async () => {

@@ -62,7 +62,7 @@ nori-substack note export \
   --output notes.json
 ```
 
-To select an approved older Note, add `--note-id <id>`; the author and top-level filters still apply while the lookback cutoff is bypassed. Notes are ordered oldest first and preserve text, quote blocks, links, remote images, IDs, and timestamps.
+To select an approved older Note, add `--note-id <id>`; the author and top-level filters still apply while the lookback cutoff is bypassed. Notes are ordered oldest first and preserve text, quote blocks, links, remote images, IDs, and timestamps. Note artifacts advertise `substack-mention-spans-v1` in their `capabilities` array. When a Note contains an explicit Substack mention, its post object also includes a `mentions` array. Each entry identifies the visible `label`, Substack source identity, and half-open `start`/`end` span in the unchanged `text`; offsets use UTF-16 code units so JavaScript consumers can validate them with `text.slice(start, end)`. Ordinary prose names are not mentions and do not appear in this array.
 
 Example Article artifact:
 
