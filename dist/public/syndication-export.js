@@ -169,9 +169,17 @@ function renderList(node) {
         return [`${marker}${first}`, ...rest.map((line) => line ? `  ${line}` : line)].join("\n");
     }).join("\n");
 }
+function renderQuotedBlock(node) {
+    // Nested blockquotes still belong to the same quoted source, but their child
+    // paragraphs and lists need block separators. Flatten only the quote depth;
+    // toBlockquote() below adds the portable leading marker to every line.
+    if (isNodeType(node, "blockquote"))
+        return (node.content ?? []).map(renderQuotedBlock).filter(Boolean).join("\n\n");
+    return renderBlock(node);
+}
 function renderBlock(node) {
     if (isNodeType(node, "blockquote"))
-        return (node.content ?? []).map((child) => toBlockquote(inline(child.content))).join("\n\n");
+        return toBlockquote((node.content ?? []).map(renderQuotedBlock).filter(Boolean).join("\n\n"));
     if (isNodeType(node, "bulletlist", "orderedlist"))
         return renderList(node);
     return inline(node.content);

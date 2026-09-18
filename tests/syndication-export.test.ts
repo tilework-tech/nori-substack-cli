@@ -224,6 +224,53 @@ test("exports Note lists with one item per line and plain-text markers", async (
   ].join("\n"));
 });
 
+test("preserves block boundaries inside quoted Note text", async () => {
+  const listItem = (text: string) => ({ type: "listItem", content: [{ type: "paragraph", content: [{ type: "text", text }] }] });
+  const server = await withHttpServer((_request, response) => {
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({ items: [{ comment: {
+      id: 339024143,
+      user_id: 9744387,
+      type: "feed",
+      ancestor_path: "",
+      date: "2026-09-17T05:09:15.288Z",
+      body_json: { content: [
+        { type: "paragraph", content: [{ type: "text", text: "Before" }] },
+        { type: "blockquote", content: [
+          { type: "paragraph", content: [{ type: "text", text: "Each item below." }] },
+          { type: "orderedList", attrs: { start: 1 }, content: [listItem("First item."), listItem("Second item.")] },
+          { type: "blockquote", content: [
+            { type: "paragraph", content: [{ type: "text", text: "Compaction" }] },
+            { type: "paragraph", content: [{ type: "text", text: "Additional instructions." }] },
+          ] },
+        ] },
+        { type: "paragraph", content: [{ type: "text", text: "After" }] },
+      ] },
+      attachments: [],
+    } }] }));
+  });
+  closers.push(server.close);
+  const { output } = await tempOutput("quoted-blocks.json");
+
+  const result = await runCli(["--account-origin", server.origin, "note", "export", "--user-id", "9744387", "--note-id", "339024143", "--output", output]);
+
+  expect(result.code).toBe(0);
+  expect(JSON.parse(await readFile(output, "utf8")).posts[0].text).toBe([
+    "Before",
+    "",
+    "> Each item below.",
+    ">",
+    "> 1. First item.",
+    "> 2. Second item.",
+    ">",
+    "> Compaction",
+    ">",
+    "> Additional instructions.",
+    "",
+    "After",
+  ].join("\n"));
+});
+
 test("exports Note mentions as their visible label", async () => {
   const server = await withHttpServer((request, response) => {
     response.setHeader("content-type", "application/json");
