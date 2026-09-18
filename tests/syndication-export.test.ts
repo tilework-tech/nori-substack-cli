@@ -98,7 +98,7 @@ test("exports only recent top-level Notes from the requested author", async () =
 
   expect(result.code).toBe(0);
   const artifact = JSON.parse(await readFile(output, "utf8"));
-  expect(artifact).toMatchObject({ version: 1, kind: "posts" });
+  expect(artifact).toMatchObject({ version: 1, kind: "posts", capabilities: ["note-restack-parent"] });
   expect(artifact.posts).toEqual([{
     id: "101",
     text: "intro\n\n> quoted\n\nhttps://example.com/read",
@@ -137,6 +137,43 @@ test("exports a restack Note with its quoted selection and canonical link", asyn
     text: "Easily the line that stood out the most.\n\n> My conversations make me wonder if the technical content of data center deals is mostly beside the point.\n\nhttps://jasmi.news/p/no-data-centers-in-my-backyard",
     images: [],
     publishedAt: expect.any(String),
+  }]);
+});
+
+test("exports the parent Note id for a Note restack without copying the parent text", async () => {
+  const now = Date.now();
+  const server = await withHttpServer((_request, response) => {
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({ items: [{ comment: {
+      id: 502,
+      user_id: 9744387,
+      type: "feed",
+      ancestor_path: "",
+      date: new Date(now - 30 * 60_000).toISOString(),
+      body_json: { content: [{ type: "paragraph", content: [{ type: "text", text: "This is the child commentary." }] }] },
+      attachments: [{
+        type: "comment",
+        comment: {
+          id: 501,
+          user_id: 9744387,
+          type: "feed",
+          body: "This is the parent Note and must not be flattened into the child.",
+        },
+      }],
+    } }] }));
+  });
+  closers.push(server.close);
+  const { output } = await tempOutput("note-restack.json");
+
+  const result = await runCli(["--account-origin", server.origin, "note", "export", "--user-id", "9744387", "--note-id", "502", "--output", output]);
+
+  expect(result.code).toBe(0);
+  expect(JSON.parse(await readFile(output, "utf8")).posts).toEqual([{
+    id: "502",
+    text: "This is the child commentary.",
+    images: [],
+    publishedAt: expect.any(String),
+    restackOf: { kind: "note", id: "501" },
   }]);
 });
 
