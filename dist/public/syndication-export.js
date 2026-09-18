@@ -244,6 +244,6 @@ export async function exportNotesArtifact(client, options) {
     }).sort((left, right) => Date.parse(left.publishedAt) - Date.parse(right.publishedAt));
     if (options.noteId && notes.length === 0)
         throw new CliError("NOT_FOUND", `Note ${options.noteId} was not found in the public profile feed.`, 8, false);
-    return { version: 1, kind: "posts", posts: notes };
+    return { version: 1, kind: "posts", capabilities: ["note-restack-parent"], posts: notes };
 }
 //# sourceMappingURL=syndication-export.js.map

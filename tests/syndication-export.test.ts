@@ -98,7 +98,7 @@ test("exports only recent top-level Notes from the requested author", async () =
 
   expect(result.code).toBe(0);
   const artifact = JSON.parse(await readFile(output, "utf8"));
-  expect(artifact).toMatchObject({ version: 1, kind: "posts" });
+  expect(artifact).toMatchObject({ version: 1, kind: "posts", capabilities: ["note-restack-parent"] });
   expect(artifact.posts).toEqual([{
     id: "101",
     text: "intro\n\n> quoted\n\nhttps://example.com/read",
