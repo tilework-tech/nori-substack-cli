@@ -191,6 +191,14 @@ function renderRestack(attachment) {
     const url = post && typeof post.canonical_url === "string" && post.canonical_url ? post.canonical_url : "";
     return { ...(selection ? { quote: selection } : {}), ...(url ? { url } : {}) };
 }
+function noteRestack(attachment) {
+    if (attachment.type !== "comment" || !attachmentType(attachment.comment))
+        return undefined;
+    const id = attachment.comment.id;
+    if ((typeof id !== "string" && typeof id !== "number") || String(id).length === 0)
+        return undefined;
+    return { kind: "note", id: String(id) };
+}
 export async function exportNotesArtifact(client, options) {
     const cutoff = (options.now ?? new Date()).getTime() - options.lookbackHours * 3_600_000;
     const items = [];
@@ -221,6 +229,7 @@ export async function exportNotesArtifact(client, options) {
         const images = attachments.filter((attachment) => attachment.type === "image" && typeof attachment.imageUrl === "string").map((attachment) => attachment.imageUrl);
         const links = attachments.filter((attachment) => attachment.type === "link" && attachmentType(attachment.linkMetadata) && typeof attachment.linkMetadata.url === "string").map((attachment) => attachment.linkMetadata.url);
         const restacks = attachments.filter((attachment) => attachment.type === "post").map(renderRestack);
+        const restackOf = attachments.map(noteRestack).find((value) => value !== undefined);
         let text = renderNote(comment);
         for (const restack of restacks) {
             if (restack.quote && !text.includes(restack.quote))
@@ -231,7 +240,7 @@ export async function exportNotesArtifact(client, options) {
         for (const url of links)
             if (!text.includes(url))
                 text = text ? `${text}\n\n${url}` : url;
-        return { id: String(comment.id), text, images, publishedAt: stringField(comment.date, "date") };
+        return { id: String(comment.id), text, images, publishedAt: stringField(comment.date, "date"), ...(restackOf ? { restackOf } : {}) };
     }).sort((left, right) => Date.parse(left.publishedAt) - Date.parse(right.publishedAt));
     if (options.noteId && notes.length === 0)
         throw new CliError("NOT_FOUND", `Note ${options.noteId} was not found in the public profile feed.`, 8, false);

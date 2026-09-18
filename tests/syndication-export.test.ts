@@ -140,6 +140,43 @@ test("exports a restack Note with its quoted selection and canonical link", asyn
   }]);
 });
 
+test("exports the parent Note id for a Note restack without copying the parent text", async () => {
+  const now = Date.now();
+  const server = await withHttpServer((_request, response) => {
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({ items: [{ comment: {
+      id: 502,
+      user_id: 9744387,
+      type: "feed",
+      ancestor_path: "",
+      date: new Date(now - 30 * 60_000).toISOString(),
+      body_json: { content: [{ type: "paragraph", content: [{ type: "text", text: "This is the child commentary." }] }] },
+      attachments: [{
+        type: "comment",
+        comment: {
+          id: 501,
+          user_id: 9744387,
+          type: "feed",
+          body: "This is the parent Note and must not be flattened into the child.",
+        },
+      }],
+    } }] }));
+  });
+  closers.push(server.close);
+  const { output } = await tempOutput("note-restack.json");
+
+  const result = await runCli(["--account-origin", server.origin, "note", "export", "--user-id", "9744387", "--note-id", "502", "--output", output]);
+
+  expect(result.code).toBe(0);
+  expect(JSON.parse(await readFile(output, "utf8")).posts).toEqual([{
+    id: "502",
+    text: "This is the child commentary.",
+    images: [],
+    publishedAt: expect.any(String),
+    restackOf: { kind: "note", id: "501" },
+  }]);
+});
+
 test("exports Note lists with one item per line and plain-text markers", async () => {
   const listItem = (text: string) => ({ type: "listItem", content: [{ type: "paragraph", content: [{ type: "text", text }] }] });
   const server = await withHttpServer((request, response) => {

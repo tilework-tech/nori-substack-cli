@@ -168,6 +168,13 @@ function renderRestack(attachment: Record<string, unknown>): { quote?: string; u
   return { ...(selection ? { quote: selection } : {}), ...(url ? { url } : {}) };
 }
 
+function noteRestack(attachment: Record<string, unknown>): { kind: "note"; id: string } | undefined {
+  if (attachment.type !== "comment" || !attachmentType(attachment.comment)) return undefined;
+  const id = attachment.comment.id;
+  if ((typeof id !== "string" && typeof id !== "number") || String(id).length === 0) return undefined;
+  return { kind: "note", id: String(id) };
+}
+
 export async function exportNotesArtifact(client: PublicClient, options: { accountOrigin: string; userId: string; lookbackHours: number; noteId?: string; now?: Date }): Promise<unknown> {
   const cutoff = (options.now ?? new Date()).getTime() - options.lookbackHours * 3_600_000;
   const items: Array<{ comment?: NoteComment }> = [];
@@ -193,13 +200,14 @@ export async function exportNotesArtifact(client: PublicClient, options: { accou
     const images = attachments.filter((attachment) => attachment.type === "image" && typeof attachment.imageUrl === "string").map((attachment) => attachment.imageUrl as string);
     const links = attachments.filter((attachment) => attachment.type === "link" && attachmentType(attachment.linkMetadata) && typeof attachment.linkMetadata.url === "string").map((attachment) => (attachment.linkMetadata as Record<string, unknown>).url as string);
     const restacks = attachments.filter((attachment) => attachment.type === "post").map(renderRestack);
+    const restackOf = attachments.map(noteRestack).find((value) => value !== undefined);
     let text = renderNote(comment);
     for (const restack of restacks) {
       if (restack.quote && !text.includes(restack.quote)) text = text ? `${text}\n\n${toBlockquote(restack.quote)}` : toBlockquote(restack.quote);
       if (restack.url && !text.includes(restack.url)) text = text ? `${text}\n\n${restack.url}` : restack.url;
     }
     for (const url of links) if (!text.includes(url)) text = text ? `${text}\n\n${url}` : url;
-    return { id: String(comment.id), text, images, publishedAt: stringField(comment.date, "date") };
+    return { id: String(comment.id), text, images, publishedAt: stringField(comment.date, "date"), ...(restackOf ? { restackOf } : {}) };
   }).sort((left, right) => Date.parse(left.publishedAt) - Date.parse(right.publishedAt));
   if (options.noteId && notes.length === 0) throw new CliError("NOT_FOUND", `Note ${options.noteId} was not found in the public profile feed.`, 8, false);
   return { version: 1, kind: "posts", posts: notes };

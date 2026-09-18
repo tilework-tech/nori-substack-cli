@@ -62,7 +62,7 @@ nori-substack note export \
   --output notes.json
 ```
 
-To select an approved older Note, add `--note-id <id>`; the author and top-level filters still apply while the lookback cutoff is bypassed. Notes are ordered oldest first and preserve text, quote blocks, links, remote images, IDs, and timestamps.
+To select an approved older Note, add `--note-id <id>`; the author and top-level filters still apply while the lookback cutoff is bypassed. Notes are ordered oldest first and preserve text, quote blocks, links, remote images, IDs, and timestamps. A Note that restacks another Note includes `restackOf: { "kind": "note", "id": "<parent-id>" }`, so a destination workflow can map the parent to its native post instead of flattening it into the child text.
 
 Example Article artifact:
 
