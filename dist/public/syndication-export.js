@@ -59,6 +59,23 @@ export async function exportPostArtifact(client, postUrl) {
         parent.replaceWith("<p>[[NORI_DIVIDER]]</p>"); });
     $("a.footnote-anchor").each((_index, element) => { $(element).replaceWith(`[${$(element).text().trim()}]`); });
     $("div.footnote").each((_index, element) => { const number = $(element).find(".footnote-number").text().trim(); const body = $(element).find(".footnote-content").text().trim().replace(/\s+/g, " "); $(element).replaceWith(`<p>[${number}] ${body}</p>`); });
+    // Article mentions are empty spans whose visible name lives in data-attrs.
+    // Preserve that source name so later platform-specific handling can resolve it
+    // without silently deleting the person from the sentence.
+    $(".mention-wrap,[data-component-name='MentionToDOM']").each((_index, element) => {
+        const node = $(element);
+        const rawAttributes = node.attr("data-attrs");
+        let label = node.text().trim();
+        try {
+            const attributes = rawAttributes ? JSON.parse(rawAttributes) : undefined;
+            const candidate = attributes?.name ?? attributes?.label;
+            if (typeof candidate === "string" && candidate.trim())
+                label = candidate.trim();
+        }
+        catch { /* Preserve any visible fallback text when metadata is malformed. */ }
+        if (label)
+            node.replaceWith(`<span>${escapeHtml(label)}</span>`);
+    });
     $(".captioned-image-container").each((_index, element) => {
         const url = $(element).find("img").first().attr("src") ?? "";
         if (!url || url.includes("missing-image")) {

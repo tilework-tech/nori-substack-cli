@@ -27,7 +27,7 @@ test("exports a public Substack post as a portable article bundle", async () => 
       title: "Agents from Modal",
       canonical_url: `${server.origin}/p/agent-first`,
       cover_image: `${server.origin}/cover.png`,
-      body_html: `<p>Keep “from Modal” verbatim.</p><p>The full list of reviews is here:</p><div class="digest-post-embed" data-attrs='{&quot;title&quot;:&quot;Ilya&apos;s Papers to Carmack: Table of Contents&quot;,&quot;canonical_url&quot;:&quot;https://example.com/p/ilyas-papers&quot;}'></div><p class="button-wrapper"><a class="button primary" href="https://luma.com/agentics-4qd8"><span>Click Here for Agentics Flagship Meetup</span></a></p><div class="subscription-widget">Subscribe now</div><div><hr></div><div class="captioned-image-container"><img src="${server.origin}/diagram.png"><figcaption>A diagram</figcaption></div><div id="youtube2-p-e4dHJTTuM" class="youtube-wrap"><div class="youtube-inner"><iframe src="https://www.youtube-nocookie.com/embed/p-e4dHJTTuM?rel=0" frameborder="0"></iframe></div></div><div class="footnote"><span class="footnote-number">1</span><span class="footnote-content">Source note</span></div>`,
+      body_html: `<p>Keep “from Modal” verbatim.</p><p>My friend <span class="mention-wrap" data-attrs='{&quot;name&quot;:&quot;Danny D. Leybzon&quot;,&quot;id&quot;:4594584,&quot;type&quot;:&quot;user&quot;}' data-component-name="MentionToDOM"></span> wanted me to quote him.</p><p>The full list of reviews is here:</p><div class="digest-post-embed" data-attrs='{&quot;title&quot;:&quot;Ilya&apos;s Papers to Carmack: Table of Contents&quot;,&quot;canonical_url&quot;:&quot;https://example.com/p/ilyas-papers&quot;}'></div><p class="button-wrapper"><a class="button primary" href="https://luma.com/agentics-4qd8"><span>Click Here for Agentics Flagship Meetup</span></a></p><div class="subscription-widget">Subscribe now</div><div><hr></div><div class="captioned-image-container"><img src="${server.origin}/diagram.png"><figcaption>A diagram</figcaption></div><div id="youtube2-p-e4dHJTTuM" class="youtube-wrap"><div class="youtube-inner"><iframe src="https://www.youtube-nocookie.com/embed/p-e4dHJTTuM?rel=0" frameborder="0"></iframe></div></div><div class="footnote"><span class="footnote-number">1</span><span class="footnote-content">Source note</span></div>`,
     }));
   });
   closers.push(server.close);
@@ -45,6 +45,8 @@ test("exports a public Substack post as a portable article bundle", async () => 
     images: [{ url: `${server.origin}/diagram.png`, caption: "A diagram" }],
   });
   expect(bundle.html).toContain("Keep “from Modal” verbatim.");
+  expect(bundle.html).toContain("My friend <span>Danny D. Leybzon</span> wanted me to quote him.");
+  expect(bundle.html).not.toContain("mention-wrap");
   expect(bundle.html).toContain('The full list of reviews is here:</p><p><a href="https://example.com/p/ilyas-papers">Ilya\'s Papers to Carmack: Table of Contents</a></p>');
   expect(bundle.html).not.toContain("digest-post-embed");
   expect(bundle.html).toContain("[[NORI_DIVIDER]]");
