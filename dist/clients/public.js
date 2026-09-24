@@ -1,6 +1,6 @@
 import { load } from "cheerio";
 import { CliError } from "../core/errors.js";
-import { getJson } from "../core/http.js";
+import { getJson, publicGet } from "../core/http.js";
 function requireUrl(value, optionName) {
     if (typeof value !== "string" || !value.trim())
         throw new CliError("INVALID_ARGUMENT", `${optionName} is required.`, 2, false, { option: optionName });
@@ -16,26 +16,14 @@ function requireUrl(value, optionName) {
 }
 function endpoint(baseUrl, pathname) { const url = new URL(requireUrl(baseUrl, "publication URL")); url.pathname = pathname; url.search = ""; url.hash = ""; return url; }
 async function fetchText(url) {
-    let response;
-    try {
-        response = await fetch(url, { headers: { "user-agent": "nori-substack-cli/0.1", accept: "application/rss+xml, application/xml, text/xml" } });
-    }
-    catch (error) {
-        throw new CliError("NETWORK_ERROR", `Unable to reach Substack: ${error instanceof Error ? error.message : String(error)}`, 8, true);
-    }
+    const response = await publicGet(url, { "user-agent": "nori-substack-cli/0.1", accept: "application/rss+xml, application/xml, text/xml" });
     if (!response.ok)
         throw new CliError("HTTP_ERROR", `Substack request failed with HTTP ${response.status}.`, 8, response.status >= 500, { status: response.status });
     return response.text();
 }
 async function publicationFromHomepage(publicationUrl) {
     const url = endpoint(publicationUrl, "/");
-    let response;
-    try {
-        response = await fetch(url, { headers: { "user-agent": "nori-substack-cli/0.1", accept: "text/html" } });
-    }
-    catch (error) {
-        throw new CliError("NETWORK_ERROR", `Unable to reach Substack: ${error instanceof Error ? error.message : String(error)}`, 8, true);
-    }
+    const response = await publicGet(url, { "user-agent": "nori-substack-cli/0.1", accept: "text/html" });
     if (!response.ok)
         throw new CliError("HTTP_ERROR", `Substack homepage request failed with HTTP ${response.status}.`, 8, response.status >= 500, { status: response.status });
     const html = await response.text();
