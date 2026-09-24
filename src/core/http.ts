@@ -28,17 +28,53 @@ async function parseJsonResponse(response: Response): Promise<unknown> {
   }
 }
 
+const DEFAULT_RETRIES = 2;
+const DEFAULT_RETRY_DELAY_MS = 5_000;
+
+function envInteger(name: string, fallback: number): number {
+  const value = Number(process.env[name]);
+  return Number.isInteger(value) && value >= 0 ? value : fallback;
+}
+
+// Substack's Cloudflare edge challenges some datacenter IPs outright: every request gets a 403 with
+// `cf-mitigated: challenge`, regardless of endpoint or credentials. It is per-IP and usually short-lived.
+export function isCloudflareChallenge(response: Response): boolean {
+  return response.status === 403 && response.headers.get("cf-mitigated")?.toLowerCase() === "challenge";
+}
+
+function transient(response: Response): boolean {
+  return response.status >= 500 || isCloudflareChallenge(response);
+}
+
+// Public GETs are idempotent, so network errors, 5xx responses, and Cloudflare challenges are retried with
+// exponential backoff. Override with NORI_SUBSTACK_HTTP_RETRIES and NORI_SUBSTACK_HTTP_RETRY_DELAY_MS.
+export async function publicGet(url: string | URL, headers: Record<string, string>): Promise<Response> {
+  const retries = envInteger("NORI_SUBSTACK_HTTP_RETRIES", DEFAULT_RETRIES);
+  const baseDelay = envInteger("NORI_SUBSTACK_HTTP_RETRY_DELAY_MS", DEFAULT_RETRY_DELAY_MS);
+  for (let attempt = 0; ; attempt += 1) {
+    let response: Response | undefined;
+    let failure: unknown;
+    try { response = await fetch(url, { method: "GET", headers }); }
+    catch (error) { failure = error; }
+    if (response && !transient(response)) return response;
+    if (attempt >= retries) {
+      if (response && isCloudflareChallenge(response)) {
+        throw new CliError("CLOUDFLARE_CHALLENGE", `Substack's Cloudflare edge challenged this machine's IP (HTTP 403, cf-mitigated: challenge) on ${attempt + 1} attempts. This is an IP-level block, not an auth or endpoint problem; retry later or from another machine.`, 8, true, { status: 403, cfMitigated: "challenge", attempts: attempt + 1 });
+      }
+      if (response) return response;
+      throw new CliError("NETWORK_ERROR", `Unable to reach Substack: ${failure instanceof Error ? failure.message : "network request failed"}`, 8, true, { attempts: attempt + 1 });
+    }
+    await response?.body?.cancel();
+    await new Promise((resolve) => setTimeout(resolve, baseDelay * 2 ** attempt));
+  }
+}
+
 export async function getJson(input: string | URL, options: JsonGetOptions = {}): Promise<unknown> {
   const url = new URL(input);
   for (const [name, value] of options.query ?? []) {
     if (value !== undefined) url.searchParams.append(name, String(value));
   }
-  let response: Response;
-  try {
-    response = await fetch(url, { method: "GET", headers: { accept: "application/json", "user-agent": USER_AGENT } });
-  } catch (error) {
-    throw new CliError("NETWORK_ERROR", `Unable to reach Substack: ${error instanceof Error ? error.message : "network request failed"}`, 8, true);
-  }
+  const response = await publicGet(url, { accept: "application/json", "user-agent": USER_AGENT });
   if (response.status === 429) {
     const seconds = retryAfterSeconds(response.headers.get("retry-after"));
     const details: Record<string, unknown> = { status: response.status };
