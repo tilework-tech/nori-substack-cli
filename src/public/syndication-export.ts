@@ -65,6 +65,23 @@ export async function exportPostArtifact(client: PublicClient, postUrl: string):
     } catch { /* Preserve any visible fallback text when metadata is malformed. */ }
     if (label) node.replaceWith(`<span>${escapeHtml(label)}</span>`);
   });
+  // Image galleries are divs whose photos live only in data-attrs, so the
+  // serializer below dropped them. Export each photo as its own image marker.
+  $(".image-gallery-embed").each((_index, element) => {
+    const node = $(element);
+    let gallery: { images?: unknown; caption?: unknown } | undefined;
+    try {
+      const attributes = JSON.parse(node.attr("data-attrs") ?? "") as { gallery?: { images?: unknown; caption?: unknown } };
+      gallery = attributes.gallery;
+    } catch { /* A malformed gallery has no safe portable representation. */ }
+    const urls = Array.isArray(gallery?.images)
+      ? gallery.images.flatMap((image: unknown) => typeof image === "object" && image !== null && typeof (image as { src?: unknown }).src === "string" ? [(image as { src: string }).src] : [])
+      : [];
+    if (!urls.length) { node.remove(); return; }
+    const caption = typeof gallery?.caption === "string" ? gallery.caption.trim() : "";
+    const markers = urls.map((url) => { const marker = `<p>[[NORI_IMAGE:${images.length}]]</p>`; images.push({ url, caption: "" }); return marker; });
+    node.replaceWith(`${markers.join("")}${caption ? `<p><em>${escapeHtml(caption)}</em></p>` : ""}`);
+  });
   $(".captioned-image-container").each((_index, element) => {
     const url = $(element).find("img").first().attr("src") ?? "";
     if (!url || url.includes("missing-image")) { $(element).remove(); return; }
