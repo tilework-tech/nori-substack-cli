@@ -64,6 +64,27 @@ test("exports a public Substack post as a portable article bundle", async () => 
   expect(bundle.html).not.toContain("button-wrapper");
 });
 
+test("exports every photo in an image gallery as an image marker", async () => {
+  const gallery = JSON.stringify({ gallery: { images: [{ type: "image/jpeg", src: "https://cdn.example.com/a.jpeg" }, { type: "image/jpeg", src: "https://cdn.example.com/b.jpeg" }], caption: "Event photos", staticGalleryImage: { src: "https://cdn.example.com/static.png" } }, isEditorNode: true }).replace(/"/g, "&quot;");
+  const server = await withHttpServer((_request, response) => {
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({
+      title: "Gallery",
+      canonical_url: `${server.origin}/p/gallery`,
+      body_html: `<p>Before.</p><div class="image-gallery-embed" data-attrs="${gallery}"></div><p>After.</p>`,
+    }));
+  });
+  closers.push(server.close);
+  const { output } = await tempOutput("gallery.json");
+
+  const result = await runCli(["post", "export", "--url", `${server.origin}/p/gallery`, "--output", output]);
+
+  expect(result.code).toBe(0);
+  const bundle = JSON.parse(await readFile(output, "utf8"));
+  expect(bundle.images).toEqual([{ url: "https://cdn.example.com/a.jpeg", caption: "" }, { url: "https://cdn.example.com/b.jpeg", caption: "" }]);
+  expect(bundle.html).toBe("<p>Before.</p><p>[[NORI_IMAGE:0]]</p><p>[[NORI_IMAGE:1]]</p><p><em>Event photos</em></p><p>After.</p>");
+});
+
 test("exports only recent top-level Notes from the requested author", async () => {
   const now = Date.now();
   const note = (overrides: Record<string, unknown>) => ({
