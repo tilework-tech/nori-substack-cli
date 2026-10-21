@@ -26,7 +26,7 @@ export async function executePublicCommand(family: string, operation: string, op
   if (family === "note" && operation === "export") {
     const lookbackHours = numberOption(options, "lookbackHours") ?? 4;
     if (lookbackHours < 0) throw new CliError("INVALID_ARGUMENT", "--lookback-hours must be a non-negative number.", 2);
-    const artifact = await exportNotesArtifact(client, { accountOrigin, userId: stringOption(options, "userId"), lookbackHours, noteId: optionalString(options, "noteId") });
+    const artifact = await exportNotesArtifact(client, { accountOrigin, userId: stringOption(options, "userId"), lookbackHours, noteId: optionalString(options, "noteId"), includeRestacks: options.includeRestacks === true });
     await writeJson(stringOption(options, "output"), artifact);
     return { data: artifact };
   }
