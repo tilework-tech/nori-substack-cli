@@ -48,6 +48,7 @@ export class PublicClient {
   async getPost(publicationUrl: string, postId: string): Promise<unknown> { return getJson(endpoint(publicationUrl, `/api/v1/posts/by-id/${encodeURIComponent(postId)}`)); }
   async getPostBySlug(publicationUrl: string, slug: string): Promise<unknown> { return getJson(endpoint(publicationUrl, `/api/v1/posts/${encodeURIComponent(slug)}`)); }
   async getProfileNotes(accountOrigin: string, userId: string, cursor?: string): Promise<unknown> { return getJson(endpoint(accountOrigin, `/api/v1/reader/feed/profile/${encodeURIComponent(userId)}`), { query: [["types", "note"], ["limit", 20], ["cursor", cursor]] }); }
+  async getProfileFeed(accountOrigin: string, userId: string, cursor?: string): Promise<unknown> { return getJson(endpoint(accountOrigin, `/api/v1/reader/feed/profile/${encodeURIComponent(userId)}`), { query: [["limit", 20], ["cursor", cursor]] }); }
   async listComments(publicationUrl: string, postId: string, limit?: number): Promise<unknown> { return getJson(endpoint(publicationUrl, `/api/v1/post/${encodeURIComponent(postId)}/comments`), { query: [["all_comments", "true"], ["limit", limit ?? 20]] }); }
   async getProfile(accountOrigin: string, userId: string, handle: string): Promise<unknown> { return getJson(endpoint(accountOrigin, `/api/v1/user/${encodeURIComponent(userId)}-${encodeURIComponent(handle.replace(/^@/, ""))}/public_profile/self`)); }
   async categories(accountOrigin: string): Promise<unknown> { return getJson(endpoint(accountOrigin, "/api/v1/categories")); }

@@ -121,7 +121,7 @@ test("exports only recent top-level Notes from the requested author", async () =
 
   expect(result.code).toBe(0);
   const artifact = JSON.parse(await readFile(output, "utf8"));
-  expect(artifact).toMatchObject({ version: 1, kind: "posts", capabilities: ["note-restack-parent"] });
+  expect(artifact).toMatchObject({ version: 1, kind: "posts", capabilities: ["note-restack-parent", "note-restacked-item"] });
   expect(artifact.posts).toEqual([{
     id: "101",
     text: "intro\n\n> quoted\n\nhttps://example.com/read",
@@ -145,7 +145,7 @@ test("exports a restack Note with its quoted selection and canonical link", asyn
       attachments: [{
         type: "post",
         postSelection: { text: "My conversations make me wonder if the technical content of data center deals is mostly beside the point." },
-        post: { canonical_url: "https://jasmi.news/p/no-data-centers-in-my-backyard" },
+        post: { id: 77, title: "No data centers in my backyard", canonical_url: "https://jasmi.news/p/no-data-centers-in-my-backyard", publishedBylines: [{ name: "Jasmine Sun", handle: "jasmine" }] },
       }],
     } }] }));
   });
@@ -160,6 +160,14 @@ test("exports a restack Note with its quoted selection and canonical link", asyn
     text: "Easily the line that stood out the most.\n\n> My conversations make me wonder if the technical content of data center deals is mostly beside the point.\n\nhttps://jasmi.news/p/no-data-centers-in-my-backyard",
     images: [],
     publishedAt: expect.any(String),
+    restacked: {
+      kind: "post",
+      id: "77",
+      author: { name: "Jasmine Sun", handle: "jasmine" },
+      title: "No data centers in my backyard",
+      text: "My conversations make me wonder if the technical content of data center deals is mostly beside the point.",
+      url: "https://jasmi.news/p/no-data-centers-in-my-backyard",
+    },
   }]);
 });
 
@@ -181,6 +189,7 @@ test("exports the parent Note id for a Note restack without copying the parent t
           user_id: 9744387,
           type: "feed",
           body: "This is the parent Note and must not be flattened into the child.",
+          user: { id: 9744387, name: "Amol", handle: "theahura" },
         },
       }],
     } }] }));
@@ -197,6 +206,13 @@ test("exports the parent Note id for a Note restack without copying the parent t
     images: [],
     publishedAt: expect.any(String),
     restackOf: { kind: "note", id: "501" },
+    restacked: {
+      kind: "note",
+      id: "501",
+      author: { name: "Amol", handle: "theahura" },
+      text: "This is the parent Note and must not be flattened into the child.",
+      url: "https://substack.com/@theahura/note/c-501",
+    },
   }]);
 });
 
@@ -441,4 +457,85 @@ test("does not stop lookback pagination because one pinned item is old", async (
 
   expect(result.code).toBe(0);
   expect(JSON.parse(await readFile(output, "utf8")).posts.map((post: { id: string }) => post.id)).toEqual(["403", "402"]);
+});
+
+function restackFeed(now: number) {
+  const restackContext = (minutes: number) => ({ type: "comment_restack", timestamp: new Date(now - minutes * 60_000).toISOString(), users: [{ id: 9744387, name: "theahura", handle: "theahura" }] });
+  return { items: [
+    { type: "comment", context: { type: "note", timestamp: new Date(now - 10 * 60_000).toISOString() }, comment: {
+      id: 601, user_id: 9744387, type: "feed", ancestor_path: "", date: new Date(now - 10 * 60_000).toISOString(), body: "My own Note.",
+    } },
+    { type: "comment", context: restackContext(20), comment: {
+      id: 358491259, user_id: 235849738, name: "Eliana Du", handle: "elianadu", type: "feed", ancestor_path: "", date: new Date(now - 40 * 60_000).toISOString(),
+      body: "amol came to speak at PAIA last week", attachments: [{ type: "image", imageUrl: "https://cdn.example/paia.png" }],
+    } },
+    { type: "comment", context: restackContext(25), comment: {
+      id: 590, user_id: 9744387, name: "theahura", handle: "theahura", type: "feed", ancestor_path: "", date: new Date(now - 2 * 60 * 60_000).toISOString(), body: "An older Note of my own, bumped.",
+    } },
+    { type: "post", context: { ...restackContext(30), type: "post_restack" }, post: {
+      id: 219691026, title: "The kids are worried about p(DOOM)", canonical_url: "https://12gramsofcarbon.com/p/the-kids-are-worried-about-pdoom",
+      publishedBylines: [{ name: "Someone Else", handle: "someone" }], subtitle: "On alignment",
+    } },
+    { type: "comment", context: restackContext(9 * 60), comment: {
+      id: 357000000, user_id: 1, name: "Old", handle: "old", type: "feed", ancestor_path: "", date: new Date(now - 10 * 60 * 60_000).toISOString(), body: "outside the lookback",
+    } },
+  ] };
+}
+
+test("exports restacks without a comment, with the restacked item, only when asked", async () => {
+  const now = Date.now();
+  const urls: string[] = [];
+  const server = await withHttpServer((request, response) => {
+    urls.push(String(request.url));
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify(restackFeed(now)));
+  });
+  closers.push(server.close);
+  const { output } = await tempOutput("restacks.json");
+
+  const result = await runCli(["--account-origin", server.origin, "note", "export", "--user-id", "9744387", "--lookback-hours", "4", "--include-restacks", "--output", output]);
+
+  expect(result.code).toBe(0);
+  expect(urls[0]).not.toContain("types=note");
+  const artifact = JSON.parse(await readFile(output, "utf8"));
+  expect(artifact.capabilities).toContain("note-restacks");
+  expect(artifact.posts.map((post: { id: string }) => post.id)).toEqual(["restack-p-219691026", "restack-c-358491259", "601"]);
+  expect(artifact.posts[1]).toEqual({
+    id: "restack-c-358491259",
+    text: "",
+    images: [],
+    publishedAt: new Date(now - 20 * 60_000).toISOString(),
+    restacked: {
+      kind: "note",
+      id: "358491259",
+      author: { name: "Eliana Du", handle: "elianadu" },
+      text: "amol came to speak at PAIA last week",
+      url: "https://substack.com/@elianadu/note/c-358491259",
+    },
+  });
+  expect(artifact.posts[0].restacked).toEqual({
+    kind: "post",
+    id: "219691026",
+    author: { name: "Someone Else", handle: "someone" },
+    title: "The kids are worried about p(DOOM)",
+    text: "On alignment",
+    url: "https://12gramsofcarbon.com/p/the-kids-are-worried-about-pdoom",
+  });
+});
+
+test("leaves restacks without a comment out by default", async () => {
+  const now = Date.now();
+  const server = await withHttpServer((_request, response) => {
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify(restackFeed(now)));
+  });
+  closers.push(server.close);
+  const { output } = await tempOutput("no-restacks.json");
+
+  const result = await runCli(["--account-origin", server.origin, "note", "export", "--user-id", "9744387", "--lookback-hours", "4", "--output", output]);
+
+  expect(result.code).toBe(0);
+  const artifact = JSON.parse(await readFile(output, "utf8"));
+  expect(artifact.capabilities).not.toContain("note-restacks");
+  expect(artifact.posts.map((post: { id: string }) => post.id)).toEqual(["601"]);
 });

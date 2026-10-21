@@ -61,6 +61,7 @@ export class PublicClient {
     async getPost(publicationUrl, postId) { return getJson(endpoint(publicationUrl, `/api/v1/posts/by-id/${encodeURIComponent(postId)}`)); }
     async getPostBySlug(publicationUrl, slug) { return getJson(endpoint(publicationUrl, `/api/v1/posts/${encodeURIComponent(slug)}`)); }
     async getProfileNotes(accountOrigin, userId, cursor) { return getJson(endpoint(accountOrigin, `/api/v1/reader/feed/profile/${encodeURIComponent(userId)}`), { query: [["types", "note"], ["limit", 20], ["cursor", cursor]] }); }
+    async getProfileFeed(accountOrigin, userId, cursor) { return getJson(endpoint(accountOrigin, `/api/v1/reader/feed/profile/${encodeURIComponent(userId)}`), { query: [["limit", 20], ["cursor", cursor]] }); }
     async listComments(publicationUrl, postId, limit) { return getJson(endpoint(publicationUrl, `/api/v1/post/${encodeURIComponent(postId)}/comments`), { query: [["all_comments", "true"], ["limit", limit ?? 20]] }); }
     async getProfile(accountOrigin, userId, handle) { return getJson(endpoint(accountOrigin, `/api/v1/user/${encodeURIComponent(userId)}-${encodeURIComponent(handle.replace(/^@/, ""))}/public_profile/self`)); }
     async categories(accountOrigin) { return getJson(endpoint(accountOrigin, "/api/v1/categories")); }

@@ -9,6 +9,7 @@ export declare class PublicClient {
     getPost(publicationUrl: string, postId: string): Promise<unknown>;
     getPostBySlug(publicationUrl: string, slug: string): Promise<unknown>;
     getProfileNotes(accountOrigin: string, userId: string, cursor?: string): Promise<unknown>;
+    getProfileFeed(accountOrigin: string, userId: string, cursor?: string): Promise<unknown>;
     listComments(publicationUrl: string, postId: string, limit?: number): Promise<unknown>;
     getProfile(accountOrigin: string, userId: string, handle: string): Promise<unknown>;
     categories(accountOrigin: string): Promise<unknown>;
