@@ -88,7 +88,7 @@ describe("verified authenticated endpoint coverage", () => {
     await expectConfirmationRequired(args);
     const { request, body } = await captureRequest([...args, "--confirm"]);
     expect(request.method).toBe("POST");
-    expect(parsedUrl(request).pathname).toBe("/api/v1/comment/feed");
+    expect(parsedUrl(request).pathname).toBe("/api/v1/comment/feed/");
     expect(JSON.parse(body)).toMatchObject({
       replyMinimumRole: "everyone",
       bodyJson: { type: "doc", attrs: { schemaVersion: "v1", title: null }, content: [
