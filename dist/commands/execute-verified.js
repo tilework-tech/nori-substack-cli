@@ -97,8 +97,9 @@ async function executeNote(operation, options, globals) {
         return request(account(globals), `/api/v1/reader/feed/${segment(options, "entityKey")}`, globals);
     if (operation === "drafts")
         return queryRequest(publication(options), "/api/v1/feed/drafts", globals, [["limit", num(options, "limit", 20)]]);
+    // The trailing slash matters: Substack's Cloudflare edge answers POST /api/v1/comment/feed (no slash) with a 403 HTML page for every caller, signed in or not.
     if (operation === "create")
-        return mutate(account(globals), "/api/v1/comment/feed", globals, options, "POST", { bodyJson: textToProseMirror(str(options, "text")), replyMinimumRole: str(options, "replyMinimumRole", "everyone") }, "Publishes a Note.");
+        return mutate(account(globals), "/api/v1/comment/feed/", globals, options, "POST", { bodyJson: textToProseMirror(str(options, "text")), replyMinimumRole: str(options, "replyMinimumRole", "everyone") }, "Publishes a Note.");
     if (operation === "reply")
         return mutate(account(globals), `/api/v1/comment/${segment(options, "commentId")}/reply`, globals, options, "POST", { bodyJson: textToProseMirror(str(options, "text")) }, `Replies to Note ${str(options, "commentId")}.`);
     if (operation === "delete")
