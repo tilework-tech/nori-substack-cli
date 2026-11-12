@@ -1,11 +1,11 @@
 import { type CliError, redactSecrets } from "./errors.js";
 
 export type OutputFormat = "json" | "text";
-export interface CommandResult { data: unknown; dryRun?: boolean; alreadyCompleted?: boolean }
+export interface CommandResult { data: unknown; dryRun?: boolean; alreadyCompleted?: boolean; pagination?: { nextCursor: string | null } }
 
 export function writeResult(command: string, result: CommandResult, format: OutputFormat, stream: NodeJS.WritableStream = process.stdout): void {
   const data = command === "auth.export" ? result.data : redactSecrets(result.data);
-  const safe = { ok: true, command, dryRun: result.dryRun ?? false, alreadyCompleted: result.alreadyCompleted ?? false, data };
+  const safe = { ok: true, command, dryRun: result.dryRun ?? false, alreadyCompleted: result.alreadyCompleted ?? false, data, ...(result.pagination ? { pagination: redactSecrets(result.pagination) } : {}) };
   stream.write(format === "json" ? `${JSON.stringify(safe)}\n` : `${command}: ${JSON.stringify(safe.data)}\n`);
 }
 

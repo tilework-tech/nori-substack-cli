@@ -39,6 +39,8 @@ nori-substack discover categories
 nori-substack discover search --query "climate"
 ```
 
+`post list` returns the posts as `data` and a `pagination.nextCursor` alongside it. Pass a non-null value as `--cursor <value>` for the next page; null means there is no next page. Substack no longer accepts offset pagination. `--offset 0` is accepted for compatibility and omitted from the request; other offsets fail locally.
+
 ## Portable syndication exports
 
 Substack retrieval and normalization belong in this CLI. Export commands produce versioned JSON that triggers and destination CLIs can consume without understanding Substack APIs or HTML.

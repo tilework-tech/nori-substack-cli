@@ -19,6 +19,7 @@ Path: @/src/commands
 - Declarative specifications centralize names, descriptions, required options, defaults, and confirmation flags.
 - Export handlers stay on the credential-free public route and write deterministic JSON to explicit output paths.
 - The top-level router keeps credential-free commands on the public path.
+- `post list` in [execute-public.ts](execute-public.ts) keeps the output envelope's `data` as an array and adds `pagination.nextCursor`. Pass that value through `--cursor` to retrieve the next page; a null cursor ends pagination. `--offset 0` remains accepted for existing callers but is never sent upstream; nonzero offsets are refused.
 - Dedicated handlers own state import/export, publishing, Notes transformations, and multipart audio upload.
 
 ### Things to Know

@@ -41,7 +41,7 @@ export const commandFamilies: readonly FamilySpec[] = [
     { name: "export", description: "Use this command to inspect the latest publication export.", options: [publicationUrl] },
   ] },
   { name: "post", description: "Inspect and manage posts.", operations: [
-    { name: "list", description: "Use this command to list public Substack posts.", options: [publicationUrl, limit, offset] },
+    { name: "list", description: "Use this command to list public Substack posts.", options: [publicationUrl, limit, opt("--cursor <cursor>", "Continue with pagination.nextCursor from the previous page."), offset] },
     { name: "get", description: "Use this command to get a public post by id.", options: [publicationUrl, postId] },
     { name: "export", description: "Export a public Substack post as a portable article bundle.", options: [opt("--url <url>", "Public Substack post URL.", true), opt("--output <path>", "Destination JSON file.", true)] },
     { name: "drafts", description: "Use this command to list publication drafts.", options: [publicationUrl, limit, offset] },

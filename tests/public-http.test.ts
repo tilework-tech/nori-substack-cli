@@ -24,20 +24,60 @@ describe("unauthenticated public reads", () => {
     expect(output).toMatchObject({ ok: true, command: "publication.get", data: { id: 42, name: "Carbon" } });
   });
 
-  test("encodes pagination when listing public posts", async () => {
+  test("continues a public post listing with its opaque cursor", async () => {
     let requestedUrl = "";
     const server = await withHttpServer((request, response) => {
       requestedUrl = request.url ?? "";
       response.setHeader("content-type", "application/json");
-      response.end(JSON.stringify([{ id: 7, slug: "hello", title: "Hello" }]));
+      response.end(JSON.stringify({ posts: [{ id: 7, slug: "hello", title: "Hello" }], nextCursor: "next+/=" }));
     });
     closers.push(server.close);
 
-    const result = await runCli(["post", "list", "--publication-url", server.origin, "--limit", "2", "--offset", "4"]);
+    const result = await runCli(["post", "list", "--publication-url", server.origin, "--limit", "2", "--cursor", "previous+/="]);
 
     expect(result.code).toBe(0);
-    expect(requestedUrl).toBe("/api/v1/posts?limit=2&offset=4");
+    expect(new URL(requestedUrl, server.origin).pathname).toBe("/api/v1/posts");
+    expect(new URL(requestedUrl, server.origin).searchParams.get("limit")).toBe("2");
+    expect(new URL(requestedUrl, server.origin).searchParams.has("offset")).toBe(false);
+    expect(new URL(requestedUrl, server.origin).searchParams.get("cursor")).toBe("previous+/=");
     expect(JSON.parse(result.stdout).data).toEqual([{ id: 7, slug: "hello", title: "Hello" }]);
+    expect(JSON.parse(result.stdout).pagination).toEqual({ nextCursor: "next+/=" });
+  });
+
+  test.each([{ args: [] }, { args: ["--offset", "0"] }])("lists the first page without an upstream offset: %j", async ({ args }) => {
+    const server = await withHttpServer((request, response) => {
+      response.setHeader("content-type", "application/json");
+      if (new URL(request.url!, "http://localhost").searchParams.has("offset")) {
+        response.statusCode = 400;
+        response.end(JSON.stringify({ errors: [{ param: "offset", msg: "Invalid value" }] }));
+      } else response.end(JSON.stringify({ posts: [{ id: 223828762 }], nextCursor: null }));
+    });
+    closers.push(server.close);
+    const result = await runCli(["post", "list", "--publication-url", server.origin, ...args]);
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({ data: [{ id: 223828762 }], pagination: { nextCursor: null } });
+  });
+
+  test("still reads a legacy array listing", async () => {
+    const server = await withHttpServer((_request, response) => response.end(JSON.stringify([{ id: 7 }])));
+    closers.push(server.close);
+    const result = await runCli(["post", "list", "--publication-url", server.origin]);
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout).data).toEqual([{ id: 7 }]);
+  });
+
+  test.each([{}, { posts: null }, { posts: [], nextCursor: 42 }])("refuses an invalid listing instead of reporting no posts: %j", async (body) => {
+    const server = await withHttpServer((_request, response) => response.end(JSON.stringify(body)));
+    closers.push(server.close);
+    const result = await runCli(["post", "list", "--publication-url", server.origin]);
+    expect(result.code).toBe(8);
+    expect(JSON.parse(result.stderr).error.code).toBe("INVALID_RESPONSE");
+  });
+
+  test("explains cursor pagination instead of sending an unsupported nonzero offset", async () => {
+    const result = await runCli(["post", "list", "--publication-url", "http://127.0.0.1:1", "--offset", "20"]);
+    expect(result.code).toBe(2);
+    expect(JSON.parse(result.stderr).error).toMatchObject({ code: "INVALID_ARGUMENT", message: expect.stringMatching(/cursor/) });
   });
 
   test("returns a detailed retry-safe error for rate limiting", async () => {

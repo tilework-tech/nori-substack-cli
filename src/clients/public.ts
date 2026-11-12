@@ -2,7 +2,8 @@ import { load } from "cheerio";
 import { CliError } from "../core/errors.js";
 import { getJson, publicGet } from "../core/http.js";
 
-export interface PostListOptions { limit?: number; offset?: number }
+export interface PostListOptions { limit?: number; offset?: number; cursor?: string }
+export interface PostListPage { posts: unknown[]; nextCursor: string | null }
 function requireUrl(value: unknown, optionName: string): string {
   if (typeof value !== "string" || !value.trim()) throw new CliError("INVALID_ARGUMENT", `${optionName} is required.`, 2, false, { option: optionName });
   try { const url = new URL(value); if (!/^https?:$/.test(url.protocol)) throw new Error(); return url.toString(); }
@@ -44,7 +45,16 @@ export class PublicClient {
     }
   }
   async getArchive(publicationUrl: string): Promise<unknown> { return getJson(endpoint(publicationUrl, "/api/v1/archive")); }
-  async listPosts(publicationUrl: string, options: PostListOptions = {}): Promise<unknown> { return getJson(endpoint(publicationUrl, "/api/v1/posts"), { query: [["limit", options.limit], ["offset", options.offset]] }); }
+  async listPosts(publicationUrl: string, options: PostListOptions = {}): Promise<PostListPage> {
+    if (options.offset !== undefined && options.offset !== 0) throw new CliError("INVALID_ARGUMENT", "Substack no longer supports post offsets. Use --cursor with pagination.nextCursor from the previous page.", 2);
+    const response = await getJson(endpoint(publicationUrl, "/api/v1/posts"), { query: [["limit", options.limit], ["cursor", options.cursor]] });
+    if (Array.isArray(response)) return { posts: response, nextCursor: null };
+    const page = response as Partial<PostListPage> | null;
+    if (!page || !Array.isArray(page.posts) || (page.nextCursor !== undefined && page.nextCursor !== null && typeof page.nextCursor !== "string")) {
+      throw new CliError("INVALID_RESPONSE", "Substack returned an invalid post listing.", 8);
+    }
+    return { posts: page.posts, nextCursor: page.nextCursor ?? null };
+  }
   async getPost(publicationUrl: string, postId: string): Promise<unknown> { return getJson(endpoint(publicationUrl, `/api/v1/posts/by-id/${encodeURIComponent(postId)}`)); }
   async getPostBySlug(publicationUrl: string, slug: string): Promise<unknown> { return getJson(endpoint(publicationUrl, `/api/v1/posts/${encodeURIComponent(slug)}`)); }
   async getProfileNotes(accountOrigin: string, userId: string, cursor?: string): Promise<unknown> { return getJson(endpoint(accountOrigin, `/api/v1/reader/feed/profile/${encodeURIComponent(userId)}`), { query: [["types", "note"], ["limit", 20], ["cursor", cursor]] }); }
