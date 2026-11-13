@@ -94,6 +94,53 @@ test("keeps a footnote's links, mentions, formatting, and images", async () => {
   ]);
 });
 
+test("numbers a footnote that opens with a list and keeps repeated and loose footnote text", async () => {
+  const footnote = (n: number, content: string) => `<div class="footnote"><a id="footnote-${n}" href="#footnote-anchor-${n}" class="footnote-number">${n}</a><div class="footnote-content">${content}</div></div>`;
+  const server = await withHttpServer((_request, response) => {
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({
+      title: "Footnote blocks",
+      canonical_url: `${server.origin}/p/footnote-blocks`,
+      body_html: `<p>Body.</p>${footnote(1, "<ul><li>first item</li></ul><p>after the list</p>")}${footnote(2, "<p>See source.</p>")}${footnote(3, "<p>See source.</p>")}${footnote(4, "loose words <p>then a paragraph</p>")}`,
+    }));
+  });
+  closers.push(server.close);
+  const { output } = await tempOutput("footnote-blocks.json");
+
+  const result = await runCli(["post", "export", "--url", `${server.origin}/p/footnote-blocks`, "--output", output]);
+
+  expect(result.code).toBe(0);
+  const { html } = JSON.parse(await readFile(output, "utf8"));
+  expect(html).toContain("<p>[1]</p><ul><li>first item</li></ul><p>after the list</p>");
+  expect(html).toContain("<p>[2] See source.</p>");
+  expect(html).toContain("<p>[3] See source.</p>");
+  expect(html).toContain("loose words");
+  expect(html).toContain("then a paragraph");
+});
+
+test("keeps only text, links, and emphasis from an image caption", async () => {
+  const server = await withHttpServer((_request, response) => {
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({
+      title: "Caption markup",
+      canonical_url: `${server.origin}/p/caption-markup`,
+      body_html: `<div class="captioned-image-container"><figure><img src="https://cdn.example.com/a.png"><figcaption>Shot by <a href="https://example.com/">Ann</a><script>alert(1)</script><img src="https://evil.example.com/x.png"> <strong>here</strong></figcaption></figure></div>`,
+    }));
+  });
+  closers.push(server.close);
+  const { output } = await tempOutput("caption-markup.json");
+
+  const result = await runCli(["post", "export", "--url", `${server.origin}/p/caption-markup`, "--output", output]);
+
+  expect(result.code).toBe(0);
+  const { html } = JSON.parse(await readFile(output, "utf8"));
+  expect(html).toContain('Shot by <a href="https://example.com/">Ann</a>');
+  expect(html).toContain("<strong>here</strong>");
+  expect(html).not.toContain("alert(1)");
+  expect(html).not.toContain("<script");
+  expect(html).not.toContain("<img");
+});
+
 test("keeps links and formatting in image captions", async () => {
   const server = await withHttpServer((_request, response) => {
     response.setHeader("content-type", "application/json");

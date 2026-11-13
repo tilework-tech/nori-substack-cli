@@ -54,18 +54,28 @@ export async function exportPostArtifact(client: PublicClient, postUrl: string):
   $("div > hr").each((_index, element) => { const parent = $(element).parent(); if (parent.is("div") && parent.children().length === 1) parent.replaceWith("<p>[[NORI_DIVIDER]]</p>"); });
   $("a.footnote-anchor").each((_index, element) => { $(element).replaceWith(`[${$(element).text().trim()}]`); });
   // A footnote's body is ordinary post content: keep its blocks (links, mentions,
-  // emphasis, images) for the steps below and prefix the first paragraph with its
-  // number. X Articles have no in-page anchors, so [n] stays plain text.
+  // emphasis, images) for the steps below, numbered by a leading [n]. X Articles
+  // have no in-page anchors, so [n] stays plain text. Footnote blocks are marked
+  // so the duplicate-paragraph filter below never drops one footnote's text
+  // because another footnote says the same thing.
   $("div.footnote").each((_index, element) => {
     const node = $(element);
     const number = node.find(".footnote-number").first().text().trim();
     const content = node.find(".footnote-content").first();
-    const inner = (content.html() ?? "").trim();
-    if (!content.children("p,div,ul,ol,blockquote,h1,h2,h3").length) { node.replaceWith(`<p>[${number}] ${inner}</p>`); return; }
-    const first = content.children("p").first();
-    if (first.length) first.prepend(`[${number}] `);
-    else content.prepend(`<p>[${number}]</p>`);
-    node.replaceWith(content.html() ?? "");
+    if (!content.children(FOOTNOTE_BLOCKS).length) { node.replaceWith(`<p ${FOOTNOTE_MARK}>[${number}] ${(content.html() ?? "").trim()}</p>`); return; }
+    const blocks: string[] = [];
+    let loose = "";
+    const flushLoose = () => { if (load(loose).text().trim()) blocks.push(`<p ${FOOTNOTE_MARK}>${loose.trim()}</p>`); loose = ""; };
+    for (const child of content.contents().toArray()) {
+      if (child.type === "tag" && $(child).is(FOOTNOTE_BLOCKS)) { flushLoose(); $(child).attr(FOOTNOTE_MARK, ""); blocks.push($.html(child)); }
+      else loose += $.html(child);
+    }
+    flushLoose();
+    const [first = "", ...rest] = blocks;
+    const numbered = /^<p[\s>]/.test(first)
+      ? first.replace(/^(<p[^>]*>)/, `$1[${number}] `)
+      : `<p ${FOOTNOTE_MARK}>[${number}]</p>${first}`;
+    node.replaceWith([numbered, ...rest].join(""));
   });
   // Article mentions are empty spans whose visible name lives in data-attrs.
   // Preserve that source name so later platform-specific handling can resolve it
@@ -106,7 +116,7 @@ export async function exportPostArtifact(client: PublicClient, postUrl: string):
     const marker = `[[NORI_IMAGE:${images.length}]]`;
     images.push({ url, caption });
     // The caption's markup (links, emphasis) is kept; the serializer strips attributes.
-    $(element).replaceWith(`<p>${marker}</p>${caption ? `<p><em>${(captionNode.html() ?? "").trim()}</em></p>` : ""}`);
+    $(element).replaceWith(`<p>${marker}</p>${caption ? `<p><em>${captionHtml(captionNode.html() ?? "")}</em></p>` : ""}`);
   });
   // Video embeds. X Articles cannot embed external players (the composer's Insert
   // menu has no video/embed option), so preserve each embed as a link rather than
@@ -130,11 +140,12 @@ export async function exportPostArtifact(client: PublicClient, postUrl: string):
     const node = $(element);
     if (node.parent().closest("ul,ol,p,blockquote").length && !node.is("ul,ol")) return;
     if (!node.text().trim()) return;
+    const footnote = node.is(`[${FOOTNOTE_MARK}]`);
     node.find("*").each((_childIndex, child) => { const childNode = $(child); const href = childNode.is("a") ? childNode.attr("href") : undefined; for (const attr of Object.keys(child.attribs ?? {})) childNode.removeAttr(attr); if (href) childNode.attr("href", href); });
     for (const attr of Object.keys(element.attribs ?? {})) node.removeAttr(attr);
     const serialized = $.html(element);
     const marker = /\[\[NORI_(?:DIVIDER|IMAGE|VIDEO)/.test(node.text());
-    if (seen.has(serialized) && !marker) return;
+    if (seen.has(serialized) && !marker && !footnote) return;
     seen.add(serialized);
     parts.push(serialized);
   });
@@ -147,6 +158,21 @@ export async function exportPostArtifact(client: PublicClient, postUrl: string):
     html = html.replace(`[[NORI_VIDEO:${index}]]`, `<a href="${escapeHtml(video.url)}">${label}</a>`);
   }
   return { version: 1, kind: "article", title: stringField(post.title, "title"), canonicalUrl, html, images, videos, ...(typeof post.cover_image === "string" ? { coverUrl: post.cover_image } : {}) };
+}
+
+const FOOTNOTE_BLOCKS = "p,div,ul,ol,blockquote,h1,h2,h3";
+const FOOTNOTE_MARK = "data-nori-footnote";
+// Caption markup X Articles can carry; anything else is unwrapped to its text, and
+// non-text elements are removed with their content.
+const CAPTION_INLINE = "a,em,i,strong,b,br";
+const CAPTION_DROPPED = "script,style,noscript,template,iframe,img,picture,source,svg,video,audio,button,input,select,textarea,form";
+
+function captionHtml(html: string): string {
+  const $ = load(`<figcaption>${html}</figcaption>`, null, false);
+  const copy = $("figcaption");
+  copy.find(CAPTION_DROPPED).remove();
+  copy.find("*").not(CAPTION_INLINE).each((_index, element) => { $(element).replaceWith($(element).contents()); });
+  return (copy.html() ?? "").trim();
 }
 
 function youtubeId(src: string): string | undefined {
