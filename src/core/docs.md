@@ -18,7 +18,7 @@ Path: @/src/core
 - Storage state may come from a default owner-only file, an explicit path, or a named base64 environment handoff.
 - HTTP errors preserve status and retry safety without exposing credentials.
 - Public GETs retry network errors, 5xx responses, and Cloudflare challenges (`403` + `cf-mitigated: challenge`) with exponential backoff (`NORI_SUBSTACK_HTTP_RETRIES`, default 2; `NORI_SUBSTACK_HTTP_RETRY_DELAY_MS`, default 5000). A challenge that outlasts the retries surfaces as the retry-safe `CLOUDFLARE_CHALLENGE` error.
-- JSON output uses stable success/error envelopes.
+- [output.ts](output.ts) writes stable success/error envelopes, preserving optional pagination metadata alongside `data` so list consumers can follow cursors without a response-shape change to the data array.
 
 ### Things to Know
 

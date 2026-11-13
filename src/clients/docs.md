@@ -17,6 +17,7 @@ Path: @/src/clients
 
 - Public publication, post, comment, archive, profile, category, and search reads use direct fetches; publication metadata falls back to the public homepage preload when the former JSON endpoint is forbidden.
 - RSS is normalized into publication metadata and item records.
+- [public.ts](public.ts) normalizes post listings from either Substack's `{posts, nextCursor}` page or a legacy array into `{posts, nextCursor}`; malformed pages fail with `INVALID_RESPONSE`. Requests use the upstream cursor, omit a zero offset, and reject nonzero offsets locally because Substack rejects that query parameter.
 - Authenticated requests attach only validated Substack session cookies and redact upstream error bodies.
 
 ### Things to Know

@@ -57,10 +57,22 @@ export class PublicClient {
         }
     }
     async getArchive(publicationUrl) { return getJson(endpoint(publicationUrl, "/api/v1/archive")); }
-    async listPosts(publicationUrl, options = {}) { return getJson(endpoint(publicationUrl, "/api/v1/posts"), { query: [["limit", options.limit], ["offset", options.offset]] }); }
+    async listPosts(publicationUrl, options = {}) {
+        if (options.offset !== undefined && options.offset !== 0)
+            throw new CliError("INVALID_ARGUMENT", "Substack no longer supports post offsets. Use --cursor with pagination.nextCursor from the previous page.", 2);
+        const response = await getJson(endpoint(publicationUrl, "/api/v1/posts"), { query: [["limit", options.limit], ["cursor", options.cursor]] });
+        if (Array.isArray(response))
+            return { posts: response, nextCursor: null };
+        const page = response;
+        if (!page || !Array.isArray(page.posts) || (page.nextCursor !== undefined && page.nextCursor !== null && typeof page.nextCursor !== "string")) {
+            throw new CliError("INVALID_RESPONSE", "Substack returned an invalid post listing.", 8);
+        }
+        return { posts: page.posts, nextCursor: page.nextCursor ?? null };
+    }
     async getPost(publicationUrl, postId) { return getJson(endpoint(publicationUrl, `/api/v1/posts/by-id/${encodeURIComponent(postId)}`)); }
     async getPostBySlug(publicationUrl, slug) { return getJson(endpoint(publicationUrl, `/api/v1/posts/${encodeURIComponent(slug)}`)); }
     async getProfileNotes(accountOrigin, userId, cursor) { return getJson(endpoint(accountOrigin, `/api/v1/reader/feed/profile/${encodeURIComponent(userId)}`), { query: [["types", "note"], ["limit", 20], ["cursor", cursor]] }); }
+    async getProfileFeed(accountOrigin, userId, cursor) { return getJson(endpoint(accountOrigin, `/api/v1/reader/feed/profile/${encodeURIComponent(userId)}`), { query: [["limit", 20], ["cursor", cursor]] }); }
     async listComments(publicationUrl, postId, limit) { return getJson(endpoint(publicationUrl, `/api/v1/post/${encodeURIComponent(postId)}/comments`), { query: [["all_comments", "true"], ["limit", limit ?? 20]] }); }
     async getProfile(accountOrigin, userId, handle) { return getJson(endpoint(accountOrigin, `/api/v1/user/${encodeURIComponent(userId)}-${encodeURIComponent(handle.replace(/^@/, ""))}/public_profile/self`)); }
     async categories(accountOrigin) { return getJson(endpoint(accountOrigin, "/api/v1/categories")); }

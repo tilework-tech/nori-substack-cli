@@ -39,6 +39,8 @@ nori-substack discover categories
 nori-substack discover search --query "climate"
 ```
 
+`post list` returns the posts as `data` and a `pagination.nextCursor` alongside it. Pass a non-null value as `--cursor <value>` for the next page; null means there is no next page. Substack no longer accepts offset pagination. `--offset 0` is accepted for compatibility and omitted from the request; other offsets fail locally.
+
 ## Portable syndication exports
 
 Substack retrieval and normalization belong in this CLI. Export commands produce versioned JSON that triggers and destination CLIs can consume without understanding Substack APIs or HTML.
@@ -62,7 +64,9 @@ nori-substack note export \
   --output notes.json
 ```
 
-To select an approved older Note, add `--note-id <id>`; the author and top-level filters still apply while the lookback cutoff is bypassed. Notes are ordered oldest first and preserve text, quote blocks, links, remote images, IDs, and timestamps. Note artifacts advertise `capabilities: ["note-restack-parent"]`. A Note that restacks another Note includes `restackOf: { "kind": "note", "id": "<parent-id>" }`, so a destination workflow can map the parent to its native post instead of flattening it into the child text.
+To select an approved older Note, add `--note-id <id>`; the author and top-level filters still apply while the lookback cutoff is bypassed. Notes are ordered oldest first and preserve text, quote blocks, links, remote images, IDs, and timestamps. Note artifacts advertise `capabilities: ["note-restack-parent"]`. A Note that restacks another Note includes `restackOf: { "kind": "note", "id": "<parent-id>" }`, so a destination workflow can map the parent to its native post instead of flattening it into the child text. A Note that restacks a Note or a post (with a comment) also carries `restacked: { kind, id, author: { name, handle }, title?, text, url }`, the restacked item as a reviewer sees it; a post restack's `text` is the quoted selection (or the post subtitle) and its flattened text is unchanged. Artifacts with `restacked` advertise `note-restacked-item`.
+
+Add `--include-restacks` to also export the author's restacks *without* a comment of other people's Notes and posts. They read the full profile feed (the Notes-only feed omits them), have ids `restack-c-<note-id>` / `restack-p-<post-id>`, empty `text`, the restack time as `publishedAt`, and a `restacked` item; the artifact advertises `note-restacks`. Restacks of the author's own Notes or posts are not exported, and without the flag no restack without a comment is ever exported.
 
 Example Article artifact:
 

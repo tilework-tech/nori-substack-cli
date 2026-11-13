@@ -237,6 +237,64 @@ function renderRestack(attachment) {
     const url = post && typeof post.canonical_url === "string" && post.canonical_url ? post.canonical_url : "";
     return { ...(selection ? { quote: selection } : {}), ...(url ? { url } : {}) };
 }
+const optionalText = (value) => typeof value === "string" && value ? value : null;
+const RESTACK_CONTEXTS = new Set(["comment_restack", "post_restack"]);
+// The restacked item as a reviewer needs to see it: who wrote it, its text, and where it lives on Substack.
+function restackedNote(comment) {
+    if ((typeof comment.id !== "string" && typeof comment.id !== "number") || String(comment.id).length === 0)
+        return undefined;
+    const handle = optionalText(comment.user?.handle) ?? optionalText(comment.handle);
+    return {
+        kind: "note",
+        id: String(comment.id),
+        author: { name: optionalText(comment.user?.name) ?? optionalText(comment.name), handle },
+        text: renderNote(comment),
+        url: handle ? `https://substack.com/@${handle}/note/c-${comment.id}` : null,
+    };
+}
+function restackedPost(post, selection) {
+    if ((typeof post.id !== "string" && typeof post.id !== "number") || String(post.id).length === 0)
+        return undefined;
+    const bylines = (post.publishedBylines ?? []).filter((byline) => optionalText(byline.name));
+    return {
+        kind: "post",
+        id: String(post.id),
+        author: { name: bylines.map((byline) => byline.name).join(" and ") || null, handle: optionalText(bylines[0]?.handle) },
+        ...(optionalText(post.title) ? { title: post.title } : {}),
+        text: selection || (optionalText(post.subtitle) ?? ""),
+        url: optionalText(post.canonical_url),
+    };
+}
+function restackedAttachment(attachment) {
+    if (attachment.type === "comment" && attachmentType(attachment.comment))
+        return restackedNote(attachment.comment);
+    if (attachment.type === "post" && attachmentType(attachment.post)) {
+        const selection = attachmentType(attachment.postSelection) && typeof attachment.postSelection.text === "string" ? attachment.postSelection.text.trim() : "";
+        return restackedPost(attachment.post, selection);
+    }
+    return undefined;
+}
+// A restack with no comment of someone else's Note or post, keyed by the restacked item's entity key.
+function bareRestack(item, userId) {
+    const context = item.context;
+    if (!context || !RESTACK_CONTEXTS.has(String(context.type)) || !(context.users ?? []).some((user) => String(user.id) === userId))
+        return undefined;
+    if (typeof context.timestamp !== "string")
+        return undefined;
+    if (context.type === "comment_restack" && item.comment) {
+        if (String(item.comment.user_id) === userId)
+            return undefined;
+        const restacked = restackedNote(item.comment);
+        return restacked && { id: `restack-c-${restacked.id}`, text: "", images: [], publishedAt: context.timestamp, restacked };
+    }
+    if (context.type === "post_restack" && item.post) {
+        const restacked = restackedPost(item.post);
+        if (!restacked || (item.post.publishedBylines ?? []).some((byline) => String(byline.id) === userId))
+            return undefined;
+        return { id: `restack-p-${restacked.id}`, text: "", images: [], publishedAt: context.timestamp, restacked };
+    }
+    return undefined;
+}
 function noteRestack(attachment) {
     if (attachment.type !== "comment" || !attachmentType(attachment.comment))
         return undefined;
@@ -249,21 +307,26 @@ export async function exportNotesArtifact(client, options) {
     const cutoff = (options.now ?? new Date()).getTime() - options.lookbackHours * 3_600_000;
     const items = [];
     let cursor;
+    // The Notes-only profile feed omits restacks without a comment; the full profile feed carries them.
+    const readPage = options.includeRestacks ? client.getProfileFeed.bind(client) : client.getProfileNotes.bind(client);
     for (let pageNumber = 0; pageNumber < 100; pageNumber++) {
-        const page = await client.getProfileNotes(options.accountOrigin, options.userId, cursor);
+        const page = await readPage(options.accountOrigin, options.userId, cursor);
         const pageItems = page.items ?? [];
         items.push(...pageItems);
         const comments = pageItems.flatMap((item) => item.comment ? [item.comment] : []);
         if (options.noteId && comments.some((comment) => String(comment.id) === options.noteId))
             break;
-        const timestamps = comments.map((comment) => typeof comment.date === "string" ? Date.parse(comment.date) : Number.NaN).filter(Number.isFinite);
+        const timestamps = pageItems.map((item) => {
+            const at = RESTACK_CONTEXTS.has(String(item.context?.type)) ? item.context?.timestamp : item.comment?.date;
+            return typeof at === "string" ? Date.parse(at) : Number.NaN;
+        }).filter(Number.isFinite);
         if (!options.noteId && timestamps.length > 0 && timestamps.every((timestamp) => timestamp < cutoff))
             break;
         if (!page.nextCursor)
             break;
         cursor = page.nextCursor;
     }
-    const notes = items.flatMap((item) => item.comment ? [item.comment] : []).filter((comment) => {
+    const notes = items.flatMap((item) => item.comment && !RESTACK_CONTEXTS.has(String(item.context?.type)) ? [item.comment] : []).filter((comment) => {
         if (String(comment.user_id) !== options.userId || comment.type !== "feed" || Boolean(comment.ancestor_path))
             return false;
         if (options.noteId)
@@ -276,6 +339,7 @@ export async function exportNotesArtifact(client, options) {
         const links = attachments.filter((attachment) => attachment.type === "link" && attachmentType(attachment.linkMetadata) && typeof attachment.linkMetadata.url === "string").map((attachment) => attachment.linkMetadata.url);
         const restacks = attachments.filter((attachment) => attachment.type === "post").map(renderRestack);
         const restackOf = attachments.map(noteRestack).find((value) => value !== undefined);
+        const restacked = attachments.map(restackedAttachment).find((value) => value !== undefined);
         let text = renderNote(comment);
         for (const restack of restacks) {
             if (restack.quote && !text.includes(restack.quote))
@@ -286,10 +350,14 @@ export async function exportNotesArtifact(client, options) {
         for (const url of links)
             if (!text.includes(url))
                 text = text ? `${text}\n\n${url}` : url;
-        return { id: String(comment.id), text, images, publishedAt: stringField(comment.date, "date"), ...(restackOf ? { restackOf } : {}) };
-    }).sort((left, right) => Date.parse(left.publishedAt) - Date.parse(right.publishedAt));
+        return { id: String(comment.id), text, images, publishedAt: stringField(comment.date, "date"), ...(restackOf ? { restackOf } : {}), ...(restacked ? { restacked } : {}) };
+    });
+    const restacks = options.includeRestacks && !options.noteId
+        ? items.flatMap((item) => bareRestack(item, options.userId) ?? []).filter((restack) => Date.parse(restack.publishedAt) >= cutoff)
+        : [];
+    const posts = [...notes, ...restacks].sort((left, right) => Date.parse(left.publishedAt) - Date.parse(right.publishedAt));
     if (options.noteId && notes.length === 0)
         throw new CliError("NOT_FOUND", `Note ${options.noteId} was not found in the public profile feed.`, 8, false);
-    return { version: 1, kind: "posts", capabilities: ["note-restack-parent"], posts: notes };
+    return { version: 1, kind: "posts", capabilities: ["note-restack-parent", "note-restacked-item", ...(options.includeRestacks ? ["note-restacks"] : [])], posts };
 }
 //# sourceMappingURL=syndication-export.js.map

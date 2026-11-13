@@ -19,8 +19,10 @@ export async function executePublicCommand(family, operation, options, globals) 
         return { data: await client.getFeed(stringOption(options, "url")) };
     if (family === "publication" && operation === "archive")
         return { data: await client.getArchive(stringOption(options, "publicationUrl")) };
-    if (family === "post" && operation === "list")
-        return { data: await client.listPosts(stringOption(options, "publicationUrl"), { limit: numberOption(options, "limit"), offset: numberOption(options, "offset") }) };
+    if (family === "post" && operation === "list") {
+        const page = await client.listPosts(stringOption(options, "publicationUrl"), { limit: numberOption(options, "limit"), offset: numberOption(options, "offset"), cursor: optionalString(options, "cursor") });
+        return { data: page.posts, pagination: { nextCursor: page.nextCursor } };
+    }
     if (family === "post" && operation === "get")
         return { data: await client.getPost(stringOption(options, "publicationUrl"), stringOption(options, "postId")) };
     if (family === "post" && operation === "export") {
@@ -32,7 +34,7 @@ export async function executePublicCommand(family, operation, options, globals) 
         const lookbackHours = numberOption(options, "lookbackHours") ?? 4;
         if (lookbackHours < 0)
             throw new CliError("INVALID_ARGUMENT", "--lookback-hours must be a non-negative number.", 2);
-        const artifact = await exportNotesArtifact(client, { accountOrigin, userId: stringOption(options, "userId"), lookbackHours, noteId: optionalString(options, "noteId") });
+        const artifact = await exportNotesArtifact(client, { accountOrigin, userId: stringOption(options, "userId"), lookbackHours, noteId: optionalString(options, "noteId"), includeRestacks: options.includeRestacks === true });
         await writeJson(stringOption(options, "output"), artifact);
         return { data: artifact };
     }

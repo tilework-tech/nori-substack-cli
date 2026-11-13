@@ -4,7 +4,7 @@ import { PublicClient } from "../clients/public.js";
 import { CliError } from "../core/errors.js";
 import { exportNotesArtifact, exportPostArtifact } from "../public/syndication-export.js";
 
-type Result = { data: unknown; dryRun?: boolean };
+type Result = { data: unknown; dryRun?: boolean; pagination?: { nextCursor: string | null } };
 const stringOption = (options: Record<string, unknown>, name: string): string => { const value = options[name]; if (typeof value !== "string" || !value) throw new CliError("INVALID_ARGUMENT", `--${name} is required.`, 2); return value; };
 const numberOption = (options: Record<string, unknown>, name: string): number | undefined => { if (options[name] === undefined) return undefined; const value = Number(options[name]); if (!Number.isFinite(value)) throw new CliError("INVALID_ARGUMENT", `--${name} must be numeric.`, 2); return value; };
 const optionalString = (options: Record<string, unknown>, name: string): string | undefined => typeof options[name] === "string" && options[name] ? options[name] : undefined;
@@ -16,7 +16,10 @@ export async function executePublicCommand(family: string, operation: string, op
   if (family === "publication" && operation === "get") return { data: await client.getPublication(stringOption(options, "url")) };
   if (family === "publication" && operation === "feed") return { data: await client.getFeed(stringOption(options, "url")) };
   if (family === "publication" && operation === "archive") return { data: await client.getArchive(stringOption(options, "publicationUrl")) };
-  if (family === "post" && operation === "list") return { data: await client.listPosts(stringOption(options, "publicationUrl"), { limit: numberOption(options, "limit"), offset: numberOption(options, "offset") }) };
+  if (family === "post" && operation === "list") {
+    const page = await client.listPosts(stringOption(options, "publicationUrl"), { limit: numberOption(options, "limit"), offset: numberOption(options, "offset"), cursor: optionalString(options, "cursor") });
+    return { data: page.posts, pagination: { nextCursor: page.nextCursor } };
+  }
   if (family === "post" && operation === "get") return { data: await client.getPost(stringOption(options, "publicationUrl"), stringOption(options, "postId")) };
   if (family === "post" && operation === "export") {
     const artifact = await exportPostArtifact(client, stringOption(options, "url"));
@@ -26,7 +29,7 @@ export async function executePublicCommand(family: string, operation: string, op
   if (family === "note" && operation === "export") {
     const lookbackHours = numberOption(options, "lookbackHours") ?? 4;
     if (lookbackHours < 0) throw new CliError("INVALID_ARGUMENT", "--lookback-hours must be a non-negative number.", 2);
-    const artifact = await exportNotesArtifact(client, { accountOrigin, userId: stringOption(options, "userId"), lookbackHours, noteId: optionalString(options, "noteId") });
+    const artifact = await exportNotesArtifact(client, { accountOrigin, userId: stringOption(options, "userId"), lookbackHours, noteId: optionalString(options, "noteId"), includeRestacks: options.includeRestacks === true });
     await writeJson(stringOption(options, "output"), artifact);
     return { data: artifact };
   }

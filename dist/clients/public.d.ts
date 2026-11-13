@@ -1,14 +1,20 @@
 export interface PostListOptions {
     limit?: number;
     offset?: number;
+    cursor?: string;
+}
+export interface PostListPage {
+    posts: unknown[];
+    nextCursor: string | null;
 }
 export declare class PublicClient {
     getPublication(publicationUrl: string): Promise<unknown>;
     getArchive(publicationUrl: string): Promise<unknown>;
-    listPosts(publicationUrl: string, options?: PostListOptions): Promise<unknown>;
+    listPosts(publicationUrl: string, options?: PostListOptions): Promise<PostListPage>;
     getPost(publicationUrl: string, postId: string): Promise<unknown>;
     getPostBySlug(publicationUrl: string, slug: string): Promise<unknown>;
     getProfileNotes(accountOrigin: string, userId: string, cursor?: string): Promise<unknown>;
+    getProfileFeed(accountOrigin: string, userId: string, cursor?: string): Promise<unknown>;
     listComments(publicationUrl: string, postId: string, limit?: number): Promise<unknown>;
     getProfile(accountOrigin: string, userId: string, handle: string): Promise<unknown>;
     categories(accountOrigin: string): Promise<unknown>;

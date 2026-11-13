@@ -4,6 +4,9 @@ export interface CommandResult {
     data: unknown;
     dryRun?: boolean;
     alreadyCompleted?: boolean;
+    pagination?: {
+        nextCursor: string | null;
+    };
 }
 export declare function writeResult(command: string, result: CommandResult, format: OutputFormat, stream?: NodeJS.WritableStream): void;
 export declare function writeError(error: CliError, format: OutputFormat, stream?: NodeJS.WritableStream): void;
