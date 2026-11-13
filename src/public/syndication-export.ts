@@ -53,7 +53,20 @@ export async function exportPostArtifact(client: PublicClient, postUrl: string):
   });
   $("div > hr").each((_index, element) => { const parent = $(element).parent(); if (parent.is("div") && parent.children().length === 1) parent.replaceWith("<p>[[NORI_DIVIDER]]</p>"); });
   $("a.footnote-anchor").each((_index, element) => { $(element).replaceWith(`[${$(element).text().trim()}]`); });
-  $("div.footnote").each((_index, element) => { const number = $(element).find(".footnote-number").text().trim(); const body = $(element).find(".footnote-content").text().trim().replace(/\s+/g, " "); $(element).replaceWith(`<p>[${number}] ${body}</p>`); });
+  // A footnote's body is ordinary post content: keep its blocks (links, mentions,
+  // emphasis, images) for the steps below and prefix the first paragraph with its
+  // number. X Articles have no in-page anchors, so [n] stays plain text.
+  $("div.footnote").each((_index, element) => {
+    const node = $(element);
+    const number = node.find(".footnote-number").first().text().trim();
+    const content = node.find(".footnote-content").first();
+    const inner = (content.html() ?? "").trim();
+    if (!content.children("p,div,ul,ol,blockquote,h1,h2,h3").length) { node.replaceWith(`<p>[${number}] ${inner}</p>`); return; }
+    const first = content.children("p").first();
+    if (first.length) first.prepend(`[${number}] `);
+    else content.prepend(`<p>[${number}]</p>`);
+    node.replaceWith(content.html() ?? "");
+  });
   // Article mentions are empty spans whose visible name lives in data-attrs.
   // Preserve that source name so later platform-specific handling can resolve it
   // without silently deleting the person from the sentence.
@@ -88,10 +101,12 @@ export async function exportPostArtifact(client: PublicClient, postUrl: string):
   $(".captioned-image-container").each((_index, element) => {
     const url = $(element).find("img").first().attr("src") ?? "";
     if (!url || url.includes("missing-image")) { $(element).remove(); return; }
-    const caption = $(element).find("figcaption,.image-caption").first().text().trim();
+    const captionNode = $(element).find("figcaption,.image-caption").first();
+    const caption = captionNode.text().trim();
     const marker = `[[NORI_IMAGE:${images.length}]]`;
     images.push({ url, caption });
-    $(element).replaceWith(`<p>${marker}</p>${caption ? `<p><em>${caption}</em></p>` : ""}`);
+    // The caption's markup (links, emphasis) is kept; the serializer strips attributes.
+    $(element).replaceWith(`<p>${marker}</p>${caption ? `<p><em>${(captionNode.html() ?? "").trim()}</em></p>` : ""}`);
   });
   // Video embeds. X Articles cannot embed external players (the composer's Insert
   // menu has no video/embed option), so preserve each embed as a link rather than

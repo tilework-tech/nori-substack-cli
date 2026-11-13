@@ -64,6 +64,58 @@ test("exports a public Substack post as a portable article bundle", async () => 
   expect(bundle.html).not.toContain("button-wrapper");
 });
 
+test("keeps a footnote's links, mentions, formatting, and images", async () => {
+  const mention = JSON.stringify({ name: "Ritam Mehta", id: 340434, type: "user" }).replace(/"/g, "&quot;");
+  const image = (src: string) => `<div class="captioned-image-container"><figure><a class="image-link image2" href="${src}"><div class="image2-inset"><picture><img src="${src}"></picture></div></a><figcaption class="image-caption"></figcaption></figure></div>`;
+  const server = await withHttpServer((_request, response) => {
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({
+      title: "Footnotes",
+      canonical_url: `${server.origin}/p/footnotes`,
+      body_html: `<p>Body image first.</p>${image("https://cdn.example.com/body.png")}<p>Willow Justice,<a class="footnote-anchor" id="footnote-anchor-1" href="#footnote-1">1</a> live<a class="footnote-anchor" id="footnote-anchor-2" href="#footnote-2">2</a>.</p>`
+        + `<div class="footnote" data-component-name="FootnoteToDOM"><a id="footnote-1" href="#footnote-anchor-1" class="footnote-number">1</a><div class="footnote-content"><p><em>Especially</em> her. <span class="mention-wrap" data-attrs="${mention}" data-component-name="MentionToDOM"></span> says so.</p>${image("https://cdn.example.com/willow.png")}${image("https://cdn.example.com/second.png")}</div></div>`
+        + `<div class="footnote" data-component-name="FootnoteToDOM"><a id="footnote-2" href="#footnote-anchor-2" class="footnote-number">2</a><div class="footnote-content"><p>It's still live <a href="https://midterms.example.com/">here</a>.</p></div></div>`,
+    }));
+  });
+  closers.push(server.close);
+  const { output } = await tempOutput("footnotes.json");
+
+  const result = await runCli(["post", "export", "--url", `${server.origin}/p/footnotes`, "--output", output]);
+
+  expect(result.code).toBe(0);
+  const bundle = JSON.parse(await readFile(output, "utf8"));
+  expect(bundle.html).toContain("<p>Willow Justice,[1] live[2].</p>");
+  expect(bundle.html).toContain("<p>[1] <em>Especially</em> her. <span>Ritam Mehta</span> says so.</p><p>[[NORI_IMAGE:1]]</p><p>[[NORI_IMAGE:2]]</p>");
+  expect(bundle.html).toContain('<p>[2] It\'s still live <a href="https://midterms.example.com/">here</a>.</p>');
+  expect(bundle.images.map((entry: { url: string }) => entry.url)).toEqual([
+    "https://cdn.example.com/body.png",
+    "https://cdn.example.com/willow.png",
+    "https://cdn.example.com/second.png",
+  ]);
+});
+
+test("keeps links and formatting in image captions", async () => {
+  const server = await withHttpServer((_request, response) => {
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({
+      title: "Captions",
+      canonical_url: `${server.origin}/p/captions`,
+      body_html: `<p>Intro.</p><div class="captioned-image-container"><figure><img src="https://cdn.example.com/a.png"><figcaption class="image-caption">why does the <a href="https://www.youtube.com/watch?v=6VGLI-8ZxUc" rel="">theme song</a> play, <em>checks notes</em></figcaption></figure></div>`,
+    }));
+  });
+  closers.push(server.close);
+  const { output } = await tempOutput("captions.json");
+
+  const result = await runCli(["post", "export", "--url", `${server.origin}/p/captions`, "--output", output]);
+
+  expect(result.code).toBe(0);
+  const bundle = JSON.parse(await readFile(output, "utf8"));
+  expect(bundle.html).toContain("<p>[[NORI_IMAGE:0]]</p><p><em>why does the ");
+  expect(bundle.html).toContain('<a href="https://www.youtube.com/watch?v=6VGLI-8ZxUc">theme song</a> play, ');
+  expect(bundle.html).toContain("<em>checks notes</em>");
+  expect(bundle.images).toEqual([{ url: "https://cdn.example.com/a.png", caption: "why does the theme song play, checks notes" }]);
+});
+
 test("exports every photo in an image gallery as an image marker", async () => {
   const gallery = JSON.stringify({ gallery: { images: [{ type: "image/jpeg", src: "https://cdn.example.com/a.jpeg" }, { type: "image/jpeg", src: "https://cdn.example.com/b.jpeg" }], caption: "Event photos", staticGalleryImage: { src: "https://cdn.example.com/static.png" } }, isEditorNode: true }).replace(/"/g, "&quot;");
   const server = await withHttpServer((_request, response) => {
