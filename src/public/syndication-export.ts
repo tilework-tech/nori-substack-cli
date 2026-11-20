@@ -23,7 +23,7 @@ export async function exportPostArtifact(client: PublicClient, postUrl: string):
   const canonicalUrl = typeof post.canonical_url === "string" ? post.canonical_url : postUrl;
   const $ = load(stringField(post.body_html, "body_html"), { xmlMode: false });
   const images: Array<{ url: string; caption: string }> = [];
-  const videos: Array<{ id: string; url: string; title?: string }> = [];
+  const videos: Array<{ id: string; url: string; title?: string; thumbnailUrl?: string | null }> = [];
   // Substack post cards are divs whose link and title live only in data-attrs.
   // X cannot render the card, but dropping the div also drops the linked source.
   $(".digest-post-embed").each((_index, element) => {
@@ -150,10 +150,21 @@ export async function exportPostArtifact(client: PublicClient, postUrl: string):
     parts.push(serialized);
   });
   let html = parts.join("");
-  // Resolve each video marker to a titled link (best-effort title via oEmbed).
+  // Every video the post links is listed too, after the embeds (whose index is
+  // their marker's), so syndication can show each one's thumbnail.
+  load(html, null, false)("a[href]").each((_index, element) => {
+    const id = youtubeLinkId(element.attribs.href ?? "");
+    if (!id || seenVideoIds.has(id)) return;
+    seenVideoIds.add(id);
+    videos.push({ id, url: `https://www.youtube.com/watch?v=${id}` });
+  });
+  // Resolve each video marker to a titled link (best-effort title via oEmbed),
+  // and record each video's largest thumbnail YouTube serves (null: none).
   for (let index = 0; index < videos.length; index++) {
     const video = videos[index];
-    video.title = await youtubeTitle(video.url);
+    const [title, thumbnailUrl] = await Promise.all([youtubeTitle(video.url), youtubeThumbnail(video.id)]);
+    if (title) video.title = title;
+    video.thumbnailUrl = thumbnailUrl ?? null;
     const label = escapeHtml(video.title ?? video.url);
     html = html.replace(`[[NORI_VIDEO:${index}]]`, `<a href="${escapeHtml(video.url)}">${label}</a>`);
   }
@@ -181,13 +192,42 @@ function youtubeId(src: string): string | undefined {
   return match ? match[1] : undefined;
 }
 
+const YOUTUBE_HOSTS = new Set(["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtube-nocookie.com", "www.youtube-nocookie.com"]);
+const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
+
+/** The video a link points at, for links to youtube.com (watch, shorts, live, embed, v) and youtu.be; else undefined. */
+function youtubeLinkId(href: string): string | undefined {
+  let url: URL;
+  try { url = new URL(href); } catch { return undefined; }
+  if (url.protocol !== "https:" && url.protocol !== "http:") return undefined;
+  const host = url.hostname.toLowerCase();
+  const id = host === "youtu.be" ? url.pathname.split("/")[1]
+    : YOUTUBE_HOSTS.has(host) ? (url.pathname === "/watch" ? url.searchParams.get("v") ?? "" : url.pathname.match(/^\/(?:shorts|live|embed|v)\/([^/]+)/)?.[1] ?? "")
+      : "";
+  return VIDEO_ID.test(id) ? id : undefined;
+}
+
+/** The video's largest thumbnail: maxresdefault, else hqdefault (maxres is missing for some videos), else undefined. */
+async function youtubeThumbnail(id: string): Promise<string | undefined> {
+  const origin = process.env.YOUTUBE_THUMBNAIL_ORIGIN ?? "https://i.ytimg.com";
+  for (const size of ["maxresdefault", "hqdefault"]) {
+    const url = `${origin}/vi/${id}/${size}.jpg`;
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(8_000) });
+      await response.body?.cancel();
+      if (response.ok) return url;
+    } catch { /* Unreachable: try the next size, then go without. */ }
+  }
+  return undefined;
+}
+
 function escapeHtml(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 async function youtubeTitle(watchUrl: string): Promise<string | undefined> {
   try {
-    const response = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(watchUrl)}&format=json`, { signal: AbortSignal.timeout(8_000) });
+    const response = await fetch(`${process.env.YOUTUBE_OEMBED_ORIGIN ?? "https://www.youtube.com"}/oembed?url=${encodeURIComponent(watchUrl)}&format=json`, { signal: AbortSignal.timeout(8_000) });
     if (!response.ok) return undefined;
     const data = await response.json() as { title?: unknown };
     return typeof data.title === "string" && data.title.trim() ? data.title.trim() : undefined;
