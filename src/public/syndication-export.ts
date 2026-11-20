@@ -23,7 +23,7 @@ export async function exportPostArtifact(client: PublicClient, postUrl: string):
   const canonicalUrl = typeof post.canonical_url === "string" ? post.canonical_url : postUrl;
   const $ = load(stringField(post.body_html, "body_html"), { xmlMode: false });
   const images: Array<{ url: string; caption: string }> = [];
-  const videos: Array<{ id: string; url: string; title?: string; thumbnailUrl?: string }> = [];
+  const videos: Array<{ id: string; url: string; title?: string; thumbnailUrl?: string | null }> = [];
   // Substack post cards are divs whose link and title live only in data-attrs.
   // X cannot render the card, but dropping the div also drops the linked source.
   $(".digest-post-embed").each((_index, element) => {
@@ -159,12 +159,12 @@ export async function exportPostArtifact(client: PublicClient, postUrl: string):
     videos.push({ id, url: `https://www.youtube.com/watch?v=${id}` });
   });
   // Resolve each video marker to a titled link (best-effort title via oEmbed),
-  // and record each video's largest thumbnail YouTube serves.
+  // and record each video's largest thumbnail YouTube serves (null: none).
   for (let index = 0; index < videos.length; index++) {
     const video = videos[index];
     const [title, thumbnailUrl] = await Promise.all([youtubeTitle(video.url), youtubeThumbnail(video.id)]);
     if (title) video.title = title;
-    if (thumbnailUrl) video.thumbnailUrl = thumbnailUrl;
+    video.thumbnailUrl = thumbnailUrl ?? null;
     const label = escapeHtml(video.title ?? video.url);
     html = html.replace(`[[NORI_VIDEO:${index}]]`, `<a href="${escapeHtml(video.url)}">${label}</a>`);
   }

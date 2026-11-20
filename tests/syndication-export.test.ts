@@ -81,7 +81,7 @@ test("records each embedded or linked YouTube video with its title and largest t
     response.end(JSON.stringify({
       title: "Videos",
       canonical_url: `${server.origin}/p/videos`,
-      body_html: `<p>Watch <a href="https://youtu.be/${linked}?si=abc">my talk</a> first.</p><div id="youtube2-${embedded}" class="youtube-wrap"><div class="youtube-inner"><iframe src="https://www.youtube-nocookie.com/embed/${embedded}?rel=0"></iframe></div></div>`,
+      body_html: `<p>Watch <a href="https://youtu.be/${linked}?si=abc">my talk</a> first, then <a href="https://www.youtube.com/watch?v=${linked}">again</a> and <a href="https://youtu.be/${embedded}">the trailer</a>.</p><div id="youtube2-${embedded}" class="youtube-wrap"><div class="youtube-inner"><iframe src="https://www.youtube-nocookie.com/embed/${embedded}?rel=0"></iframe></div></div>`,
     }));
   });
   closers.push(server.close);
@@ -95,16 +95,18 @@ test("records each embedded or linked YouTube video with its title and largest t
     { id: embedded, url: `https://www.youtube.com/watch?v=${embedded}`, title: "The Embedded Trailer", thumbnailUrl: `${server.origin}/vi/${embedded}/maxresdefault.jpg` },
     { id: linked, url: `https://www.youtube.com/watch?v=${linked}`, title: "The Linked Talk", thumbnailUrl: `${server.origin}/vi/${linked}/hqdefault.jpg` },
   ]);
-  expect(bundle.html).toContain(`<p>Watch <a href="https://youtu.be/${linked}?si=abc">my talk</a> first.</p>`);
+  expect(bundle.html).toContain(`<p>Watch <a href="https://youtu.be/${linked}?si=abc">my talk</a> first, then <a href="https://www.youtube.com/watch?v=${linked}">again</a> and <a href="https://youtu.be/${embedded}">the trailer</a>.</p>`);
   expect(bundle.html).toContain(`<p><a href="https://www.youtube.com/watch?v=${embedded}">The Embedded Trailer</a></p>`);
 });
 
-test("records a YouTube video without a thumbnail when YouTube has none", async () => {
-  const id = "goneVideo33";
+test("records that YouTube serves no thumbnail for a video, and a thumbnail without a title when oEmbed fails", async () => {
+  const gone = "goneVideo33";
+  const untitled = "untitled444";
   const server = await withHttpServer((request, response) => {
+    if (request.url === `/vi/${untitled}/hqdefault.jpg`) { response.end("jpeg"); return; }
     if ((request.url ?? "").startsWith("/vi/") || (request.url ?? "").startsWith("/oembed")) { response.statusCode = 404; response.end(); return; }
     response.setHeader("content-type", "application/json");
-    response.end(JSON.stringify({ title: "Gone", canonical_url: `${server.origin}/p/gone`, body_html: `<p><a href="https://www.youtube.com/watch?v=${id}">A removed video</a></p>` }));
+    response.end(JSON.stringify({ title: "Gone", canonical_url: `${server.origin}/p/gone`, body_html: `<p><a href="https://www.youtube.com/watch?v=${gone}">A removed video</a></p><p><a href="https://www.youtube.com/live/${untitled}">A stream</a></p>` }));
   });
   closers.push(server.close);
   const { output } = await tempOutput("gone.json");
@@ -112,7 +114,10 @@ test("records a YouTube video without a thumbnail when YouTube has none", async 
   const result = await runCli(["post", "export", "--url", `${server.origin}/p/gone`, "--output", output], { YOUTUBE_THUMBNAIL_ORIGIN: server.origin, YOUTUBE_OEMBED_ORIGIN: server.origin });
 
   expect(result.code, result.stderr).toBe(0);
-  expect(JSON.parse(await readFile(output, "utf8")).videos).toEqual([{ id, url: `https://www.youtube.com/watch?v=${id}` }]);
+  expect(JSON.parse(await readFile(output, "utf8")).videos).toEqual([
+    { id: gone, url: `https://www.youtube.com/watch?v=${gone}`, thumbnailUrl: null },
+    { id: untitled, url: `https://www.youtube.com/watch?v=${untitled}`, thumbnailUrl: `${server.origin}/vi/${untitled}/hqdefault.jpg` },
+  ]);
 });
 
 test("keeps a footnote's links, mentions, formatting, and images", async () => {
