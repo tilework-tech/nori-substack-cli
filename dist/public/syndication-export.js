@@ -192,14 +192,13 @@ export async function exportPostArtifact(client, postUrl) {
         videos.push({ id, url: `https://www.youtube.com/watch?v=${id}` });
     });
     // Resolve each video marker to a titled link (best-effort title via oEmbed),
-    // and record each video's largest thumbnail YouTube serves.
+    // and record each video's largest thumbnail YouTube serves (null: none).
     for (let index = 0; index < videos.length; index++) {
         const video = videos[index];
         const [title, thumbnailUrl] = await Promise.all([youtubeTitle(video.url), youtubeThumbnail(video.id)]);
         if (title)
             video.title = title;
-        if (thumbnailUrl)
-            video.thumbnailUrl = thumbnailUrl;
+        video.thumbnailUrl = thumbnailUrl ?? null;
         const label = escapeHtml(video.title ?? video.url);
         html = html.replace(`[[NORI_VIDEO:${index}]]`, `<a href="${escapeHtml(video.url)}">${label}</a>`);
     }
