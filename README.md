@@ -53,7 +53,7 @@ nori-substack post export \
   --output article.json
 ```
 
-The bundle preserves source copy and includes the title, canonical URL, cleaned HTML, cover image, and inline images. Structural elements use portable markers such as `[[NORI_DIVIDER]]` and `[[NORI_IMAGE:0]]`.
+The bundle preserves source copy and includes the title, canonical URL, cleaned HTML, cover image, and inline images. Structural elements use portable markers such as `[[NORI_DIVIDER]]` and `[[NORI_IMAGE:0]]`. `videos` lists every YouTube video the post embeds (each embed becomes a titled link paragraph) and then every other one it links, each with its `id`, watch `url`, oEmbed `title` when YouTube gives one, and `thumbnailUrl`: `maxresdefault.jpg`, else `hqdefault.jpg`, left out when YouTube serves neither. `YOUTUBE_THUMBNAIL_ORIGIN` and `YOUTUBE_OEMBED_ORIGIN` point the probes elsewhere (tests).
 
 Export recent top-level Notes from one author:
 

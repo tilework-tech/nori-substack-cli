@@ -64,6 +64,57 @@ test("exports a public Substack post as a portable article bundle", async () => 
   expect(bundle.html).not.toContain("button-wrapper");
 });
 
+test("records each embedded or linked YouTube video with its title and largest thumbnail, leaving inline links as text", async () => {
+  const embedded = "embedVideo1";
+  const linked = "linkVideo22";
+  const server = await withHttpServer((request, response) => {
+    const url = new URL(request.url ?? "/", "http://x");
+    if (url.pathname === "/oembed") {
+      const id = new URL(url.searchParams.get("url") ?? "").searchParams.get("v");
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ title: id === embedded ? "The Embedded Trailer" : "The Linked Talk" }));
+      return;
+    }
+    if (url.pathname === `/vi/${embedded}/maxresdefault.jpg` || url.pathname === `/vi/${linked}/hqdefault.jpg`) { response.setHeader("content-type", "image/jpeg"); response.end("jpeg"); return; }
+    if (url.pathname.startsWith("/vi/")) { response.statusCode = 404; response.end("placeholder"); return; }
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({
+      title: "Videos",
+      canonical_url: `${server.origin}/p/videos`,
+      body_html: `<p>Watch <a href="https://youtu.be/${linked}?si=abc">my talk</a> first.</p><div id="youtube2-${embedded}" class="youtube-wrap"><div class="youtube-inner"><iframe src="https://www.youtube-nocookie.com/embed/${embedded}?rel=0"></iframe></div></div>`,
+    }));
+  });
+  closers.push(server.close);
+  const { output } = await tempOutput("videos.json");
+
+  const result = await runCli(["post", "export", "--url", `${server.origin}/p/videos`, "--output", output], { YOUTUBE_THUMBNAIL_ORIGIN: server.origin, YOUTUBE_OEMBED_ORIGIN: server.origin });
+
+  expect(result.code, result.stderr).toBe(0);
+  const bundle = JSON.parse(await readFile(output, "utf8"));
+  expect(bundle.videos).toEqual([
+    { id: embedded, url: `https://www.youtube.com/watch?v=${embedded}`, title: "The Embedded Trailer", thumbnailUrl: `${server.origin}/vi/${embedded}/maxresdefault.jpg` },
+    { id: linked, url: `https://www.youtube.com/watch?v=${linked}`, title: "The Linked Talk", thumbnailUrl: `${server.origin}/vi/${linked}/hqdefault.jpg` },
+  ]);
+  expect(bundle.html).toContain(`<p>Watch <a href="https://youtu.be/${linked}?si=abc">my talk</a> first.</p>`);
+  expect(bundle.html).toContain(`<p><a href="https://www.youtube.com/watch?v=${embedded}">The Embedded Trailer</a></p>`);
+});
+
+test("records a YouTube video without a thumbnail when YouTube has none", async () => {
+  const id = "goneVideo33";
+  const server = await withHttpServer((request, response) => {
+    if ((request.url ?? "").startsWith("/vi/") || (request.url ?? "").startsWith("/oembed")) { response.statusCode = 404; response.end(); return; }
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({ title: "Gone", canonical_url: `${server.origin}/p/gone`, body_html: `<p><a href="https://www.youtube.com/watch?v=${id}">A removed video</a></p>` }));
+  });
+  closers.push(server.close);
+  const { output } = await tempOutput("gone.json");
+
+  const result = await runCli(["post", "export", "--url", `${server.origin}/p/gone`, "--output", output], { YOUTUBE_THUMBNAIL_ORIGIN: server.origin, YOUTUBE_OEMBED_ORIGIN: server.origin });
+
+  expect(result.code, result.stderr).toBe(0);
+  expect(JSON.parse(await readFile(output, "utf8")).videos).toEqual([{ id, url: `https://www.youtube.com/watch?v=${id}` }]);
+});
+
 test("keeps a footnote's links, mentions, formatting, and images", async () => {
   const mention = JSON.stringify({ name: "Ritam Mehta", id: 340434, type: "user" }).replace(/"/g, "&quot;");
   const image = (src: string) => `<div class="captioned-image-container"><figure><a class="image-link image2" href="${src}"><div class="image2-inset"><picture><img src="${src}"></picture></div></a><figcaption class="image-caption"></figcaption></figure></div>`;
