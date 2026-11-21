@@ -159,14 +159,15 @@ export async function exportPostArtifact(client: PublicClient, postUrl: string):
     videos.push({ id, url: `https://www.youtube.com/watch?v=${id}` });
   });
   // Resolve each video marker to a titled link (best-effort title via oEmbed),
-  // and record each video's largest thumbnail YouTube serves (null: none).
+  // and record each video's largest thumbnail YouTube serves (null: it serves
+  // none; left out when YouTube could not be reached).
   for (let index = 0; index < videos.length; index++) {
     const video = videos[index];
     const [title, thumbnailUrl] = await Promise.all([youtubeTitle(video.url), youtubeThumbnail(video.id)]);
     if (title) video.title = title;
-    video.thumbnailUrl = thumbnailUrl ?? null;
-    const label = escapeHtml(video.title ?? video.url);
-    html = html.replace(`[[NORI_VIDEO:${index}]]`, `<a href="${escapeHtml(video.url)}">${label}</a>`);
+    if (thumbnailUrl !== undefined) video.thumbnailUrl = thumbnailUrl;
+    const link = `<a href="${escapeHtml(video.url)}">${escapeHtml(video.title ?? video.url)}</a>`;
+    html = html.replace(`[[NORI_VIDEO:${index}]]`, () => link);
   }
   return { version: 1, kind: "article", title: stringField(post.title, "title"), canonicalUrl, html, images, videos, ...(typeof post.cover_image === "string" ? { coverUrl: post.cover_image } : {}) };
 }
@@ -207,18 +208,24 @@ function youtubeLinkId(href: string): string | undefined {
   return VIDEO_ID.test(id) ? id : undefined;
 }
 
-/** The video's largest thumbnail: maxresdefault, else hqdefault (maxres is missing for some videos), else undefined. */
-async function youtubeThumbnail(id: string): Promise<string | undefined> {
+/**
+ * The video's largest thumbnail: maxresdefault, else hqdefault (maxres is
+ * missing for some videos); null when YouTube answers 404 for both, undefined
+ * when it could not be asked (a timeout, a network error, another status).
+ */
+async function youtubeThumbnail(id: string): Promise<string | null | undefined> {
   const origin = process.env.YOUTUBE_THUMBNAIL_ORIGIN ?? "https://i.ytimg.com";
+  let missing = true;
   for (const size of ["maxresdefault", "hqdefault"]) {
     const url = `${origin}/vi/${id}/${size}.jpg`;
     try {
       const response = await fetch(url, { signal: AbortSignal.timeout(8_000) });
       await response.body?.cancel();
       if (response.ok) return url;
-    } catch { /* Unreachable: try the next size, then go without. */ }
+      if (response.status !== 404) missing = false;
+    } catch { missing = false; }
   }
-  return undefined;
+  return missing ? null : undefined;
 }
 
 function escapeHtml(value: string): string {
