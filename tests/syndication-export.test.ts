@@ -120,6 +120,24 @@ test("records that YouTube serves no thumbnail for a video, and a thumbnail with
   ]);
 });
 
+test("leaves a video's thumbnail unknown when YouTube cannot be reached, and keeps a $ in its title", async () => {
+  const id = "dollarVid55";
+  const server = await withHttpServer((request, response) => {
+    if ((request.url ?? "").startsWith("/oembed")) { response.setHeader("content-type", "application/json"); response.end(JSON.stringify({ title: "Make $$ fast $& cheap" })); return; }
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({ title: "Money", canonical_url: `${server.origin}/p/money`, body_html: `<div class="youtube-wrap"><iframe src="https://www.youtube.com/embed/${id}"></iframe></div>` }));
+  });
+  closers.push(server.close);
+  const { output } = await tempOutput("money.json");
+
+  const result = await runCli(["post", "export", "--url", `${server.origin}/p/money`, "--output", output], { YOUTUBE_THUMBNAIL_ORIGIN: "http://127.0.0.1:9", YOUTUBE_OEMBED_ORIGIN: server.origin });
+
+  expect(result.code, result.stderr).toBe(0);
+  const bundle = JSON.parse(await readFile(output, "utf8"));
+  expect(bundle.videos).toEqual([{ id, url: `https://www.youtube.com/watch?v=${id}`, title: "Make $$ fast $& cheap" }]);
+  expect(bundle.html).toContain(`<a href="https://www.youtube.com/watch?v=${id}">Make $$ fast $&amp; cheap</a>`);
+});
+
 test("keeps a footnote's links, mentions, formatting, and images", async () => {
   const mention = JSON.stringify({ name: "Ritam Mehta", id: 340434, type: "user" }).replace(/"/g, "&quot;");
   const image = (src: string) => `<div class="captioned-image-container"><figure><a class="image-link image2" href="${src}"><div class="image2-inset"><picture><img src="${src}"></picture></div></a><figcaption class="image-caption"></figcaption></figure></div>`;
